@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Matrix Sphere</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+            cursor: none;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix"></canvas>
+
+    <script>
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+        
+        // 三维点结构
+        class Point3D {
+            constructor(x, y, z) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                this.original = { x, y, z };
+            }
+        }
+
+        // 配置参数
+        const config = {
+            fontSize: 12,
+            sphereRadius: 200,
+            rotationSpeed: 0.002,
+            charOpacity: 0.3,
+            chars: ['0', '1']
+        };
+
+        // 初始化
+        let points = [];
+        let angle = 0;
+        let mousePos = { x: 0, y: 0 };
+
+        // 生成球面点阵
+        function createSphere() {
+            const density = 40;
+            for (let theta = 0; theta < Math.PI; theta += Math.PI/density) {
+                for (let phi = 0; phi < 2*Math.PI; phi += Math.PI/density) {
+                    const x = config.sphereRadius * Math.sin(theta) * Math.cos(phi);
+                    const y = config.sphereRadius * Math.sin(theta) * Math.sin(phi);
+                    const z = config.sphereRadius * Math.cos(theta);
+                    points.push(new Point3D(x, y, z));
+                }
+            }
+        }
+
+        // 投影函数（3D转2D）
+        function project(point) {
+            const fov = 300;
+            const scale = fov / (fov + point.z);
+            return {
+                x: point.x * scale + canvas.width/2,
+                y: point.y * scale + canvas.height/2
+            };
+        }
+
+        // 旋转更新
+        function rotatePoints() {
+            angle += config.rotationSpeed;
+            points.forEach(p => {
+                // 绕Y轴旋转
+                const x = p.original.x * Math.cos(angle) - p.original.z * Math.sin(angle);
+                const z = p.original.x * Math.sin(angle) + p.original.z * Math.cos(angle);
+                p.x = x;
+                p.z = z;
+            });
+        }
+
+        // 绘制函数
+        function draw() {
+            // 背景处理
+            ctx.fillStyle = `rgba(0, 20, 0, ${config.charOpacity})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制球体字符
+            ctx.fillStyle = '#0F0';
+            ctx.font = `${config.fontSize}px monospace`;
+            ctx.textAlign = 'center';
+
+            points.forEach(p => {
+                const pos = project(p);
+                const char = config.chars[Math.floor(Math.random() * config.chars.length)];
+                const alpha = Math.min(1 - (p.z + config.sphereRadius)/(2 * config.sphereRadius), 0.8);
+                ctx.fillStyle = `rgba(0, 255, 0, ${alpha})`;
+                ctx.fillText(char, pos.x, pos.y);
+            });
+
+            // 添加动态光点
+            const highlightPoint = points[Math.floor(Math.random() * points.length)];
+            const highlightPos = project(highlightPoint);
+            ctx.beginPath();
+            ctx.arc(highlightPos.x, highlightPos.y, 3, 0, Math.PI*2);
+            ctx.fillStyle = '#0F0';
+            ctx.fill();
+
+            rotatePoints();
+            requestAnimationFrame(draw);
+        }
+
+        // 窗口调整
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', e => {
+            mousePos = { x: e.clientX, y: e.clientY };
+        });
+
+        // 初始化
+        createSphere();
+        resize();
+        draw();
+
+        // 全屏控制
+        canvas.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                canvas.requestFullscreen();
+            }
+        });
+    </script>
+</body>
+</html>

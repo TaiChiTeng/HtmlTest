@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>彩色气球动画</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(0deg, #FFE4B5 0%, #87CEEB 100%);
+        }
+
+        .balloon {
+            position: absolute;
+            bottom: -100px;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2));
+        }
+
+        .balloon-body {
+            position: relative;
+            border-radius: 50%;
+            animation: sway 3s ease-in-out infinite;
+        }
+
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 2px solid #666;
+            border-right: 2px solid transparent;
+            border-top: 8px solid #666;
+            width: 4px;
+            height: 12px;
+        }
+
+        .string {
+            position: absolute;
+            left: 50%;
+            width: 2px;
+            background: #666;
+            transform: translateX(-1px);
+        }
+
+        .speed-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-family: Arial, sans-serif;
+        }
+
+        @keyframes float {
+            from { transform: translateY(0); }
+            to { transform: translateY(-150vh); }
+        }
+
+        @keyframes sway {
+            0%, 100% { transform: translateX(-2px) rotate(-2deg); }
+            50% { transform: translateX(2px) rotate(2deg); }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD', '#D4A5A5'];
+        
+        function createBalloon() {
+            const balloon = document.createElement('div');
+            balloon.className = 'balloon';
+            
+            const body = document.createElement('div');
+            body.className = 'balloon-body';
+            
+            // 生成速度和大小
+            const duration = 6000 + Math.random() * 4000;
+            const speed = 1 + Math.floor((10000 - duration) / 500); // 1-9
+            const size = 60 + (9 - speed) * 8; // 速度越小尺寸越大
+            
+            body.style.width = `${size}px`;
+            body.style.height = `${size * 1.2}px`;
+            body.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            // 添加速度数字
+            const number = document.createElement('div');
+            number.className = 'speed-number';
+            number.textContent = speed;
+            number.style.fontSize = `${size/4}px`;
+            
+            // 添加绳子
+            const string = document.createElement('div');
+            string.className = 'string';
+            string.style.height = `${size * 0.6}px`;
+            string.style.bottom = `-${size * 0.6}px`;
+
+            body.appendChild(number);
+            balloon.appendChild(body);
+            balloon.appendChild(string);
+            
+            // 随机位置
+            balloon.style.left = `${Math.random() * 95}%`;
+            
+            // 设置动画
+            balloon.style.animation = `float ${duration}ms linear forwards`;
+            
+            document.body.appendChild(balloon);
+            
+            // 动画结束后移除元素
+            setTimeout(() => balloon.remove(), duration);
+        }
+
+        // 初始创建气球
+        for(let i = 0; i < 15; i++) {
+            setTimeout(createBalloon, i * 300);
+        }
+        
+        // 持续生成气球
+        setInterval(createBalloon, 1500);
+    </script>
+</body>
+</html>

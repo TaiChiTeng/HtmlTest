@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>彩色气球动画</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(0deg, #FFE4B5 0%, #87CEEB 100%);
+        }
+
+        .balloon {
+            position: absolute;
+            bottom: -100px;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2));
+        }
+
+        .balloon-body {
+            width: 60px;
+            height: 70px;
+            border-radius: 50%;
+            position: relative;
+            animation: sway 3s ease-in-out infinite;
+        }
+
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 2px solid #666;
+            border-right: 2px solid transparent;
+            border-top: 8px solid #666;
+            width: 4px;
+            height: 12px;
+        }
+
+        .string {
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            width: 2px;
+            height: 40px;
+            background: #666;
+            transform: translateX(-1px);
+        }
+
+        @keyframes float {
+            from { transform: translateY(0); }
+            to { transform: translateY(-150vh); }
+        }
+
+        @keyframes sway {
+            0%, 100% { transform: translateX(-2px) rotate(-2deg); }
+            50% { transform: translateX(2px) rotate(2deg); }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD', '#D4A5A5'];
+        
+        function createBalloon() {
+            const balloon = document.createElement('div');
+            balloon.className = 'balloon';
+            
+            const body = document.createElement('div');
+            body.className = 'balloon-body';
+            body.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const string = document.createElement('div');
+            string.className = 'string';
+            
+            balloon.appendChild(body);
+            balloon.appendChild(string);
+            
+            // 随机位置
+            const startLeft = Math.random() * 100;
+            balloon.style.left = `${startLeft}%`;
+            
+            // 动画参数
+            const duration = 6000 + Math.random() * 4000;
+            const delay = Math.random() * 2000;
+            
+            balloon.style.animation = `float ${duration}ms linear ${delay}ms forwards`;
+            
+            document.body.appendChild(balloon);
+            
+            // 动画结束后移除元素
+            setTimeout(() => balloon.remove(), duration + delay);
+        }
+
+        // 初始创建气球
+        for(let i = 0; i < 15; i++) {
+            setTimeout(createBalloon, i * 300);
+        }
+        
+        // 持续生成气球
+        setInterval(createBalloon, 1500);
+    </script>
+</body>
+</html>

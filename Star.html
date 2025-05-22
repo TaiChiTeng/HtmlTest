@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>星空动画</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        body {
+            background: #000;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 1.5s infinite ease-in-out;
+        }
+
+        @keyframes twinkle {
+            0%, 100% {
+                opacity: 0.3;
+                transform: scale(0.5);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* 不同大小的星星 */
+        .star:nth-child(3n) {
+            width: 2px;
+            height: 2px;
+            animation-duration: 1.2s;
+        }
+        .star:nth-child(3n+1) {
+            width: 3px;
+            height: 3px;
+            animation-duration: 0.8s;
+        }
+        .star:nth-child(3n+2) {
+            width: 1px;
+            height: 1px;
+            animation-duration: 2s;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // 生成星星
+        function createStars() {
+            const container = document.body;
+            const starCount = 200; // 星星数量
+
+            // 清空现有星星
+            container.innerHTML = '';
+
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                
+                // 随机位置
+                const x = Math.random() * window.innerWidth;
+                const y = Math.random() * window.innerHeight;
+                
+                // 随机动画延迟
+                const delay = Math.random() * 1.5;
+                
+                star.style.left = x + 'px';
+                star.style.top = y + 'px';
+                star.style.animationDelay = delay + 's';
+                
+                container.appendChild(star);
+            }
+        }
+
+        // 窗口大小改变时重新生成星星
+        window.addEventListener('resize', createStars);
+
+        // 初始生成
+        createStars();
+
+        // 添加点击重新生成效果（可选）
+        document.addEventListener('click', createStars);
+    </script>
+</body>
+</html>

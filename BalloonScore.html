@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>彩色气球游戏</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(0deg, #FFE4B5 0%, #87CEEB 100%);
+        }
+
+        .balloon {
+            position: absolute;
+            bottom: -100px;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2));
+            cursor: pointer;
+            transform-origin: center;
+        }
+
+        .balloon-body {
+            position: relative;
+            border-radius: 50%;
+            animation: sway 3s ease-in-out infinite;
+        }
+
+        #score {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px;
+            color: #FF6B6B;
+            text-shadow: 3px 3px 0 #FFF, -1px -1px 0 #FFF;
+            font-family: Arial, sans-serif;
+            z-index: 999;
+            user-select: none;
+        }
+
+        .balloon::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 2px solid #666;
+            border-right: 2px solid transparent;
+            border-top: 8px solid #666;
+            width: 4px;
+            height: 12px;
+        }
+
+        .string {
+            position: absolute;
+            left: 50%;
+            width: 2px;
+            background: #666;
+            transform: translateX(-1px);
+        }
+
+        .speed-number {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            font-family: Arial, sans-serif;
+        }
+
+        @keyframes float {
+            from { transform: translateY(0); }
+            to { transform: translateY(-150vh); }
+        }
+
+        @keyframes sway {
+            0%, 100% { transform: translateX(-2px) rotate(-2deg); }
+            50% { transform: translateX(2px) rotate(2deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="score">0</div>
+
+    <script>
+        const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEEAD', '#D4A5A5'];
+        let score = 0;
+        const scoreElement = document.getElementById('score');
+        
+        function createBalloon() {
+            const balloon = document.createElement('div');
+            balloon.className = 'balloon';
+            
+            const body = document.createElement('div');
+            body.className = 'balloon-body';
+            
+            const duration = 6000 + Math.random() * 4000;
+            const speed = 1 + Math.floor((10000 - duration) / 500);
+            const size = 60 + (9 - speed) * 8;
+            
+            body.style.width = `${size}px`;
+            body.style.height = `${size * 1.2}px`;
+            body.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            
+            const number = document.createElement('div');
+            number.className = 'speed-number';
+            number.textContent = speed;
+            number.style.fontSize = `${size/4}px`;
+            
+            const string = document.createElement('div');
+            string.className = 'string';
+            string.style.height = `${size * 0.6}px`;
+            string.style.bottom = `-${size * 0.6}px`;
+
+            const handleClick = (e) => {
+                e.stopPropagation();
+                
+                const currentTransform = getComputedStyle(balloon).transform;
+                const currentOpacity = getComputedStyle(balloon).opacity;
+                
+                balloon.style.pointerEvents = 'none';
+                balloon.style.animation = 'none';
+                balloon.style.transform = currentTransform;
+                balloon.style.opacity = currentOpacity;
+                void balloon.offsetWidth;
+                
+                balloon.style.transition = 'all 0.5s ease-out';
+                balloon.style.transform = `${currentTransform} scale(2)`;
+                balloon.style.opacity = '0';
+                
+                score += speed;
+                scoreElement.textContent = score;
+                
+                setTimeout(() => balloon.remove(), 500);
+                balloon.removeEventListener('click', handleClick);
+            };
+
+            balloon.addEventListener('click', handleClick);
+
+            body.appendChild(number);
+            balloon.appendChild(body);
+            balloon.appendChild(string);
+            
+            balloon.style.left = `${Math.random() * 95}%`;
+            balloon.style.animation = `float ${duration}ms linear forwards`;
+            
+            document.body.appendChild(balloon);
+            setTimeout(() => balloon.remove(), duration);
+        }
+
+        for(let i = 0; i < 15; i++) {
+            setTimeout(createBalloon, i * 300);
+        }
+        
+        setInterval(createBalloon, 1500);
+    </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>星空鼠标互动特效</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            cursor: none;
+        }
+        .star {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const stars = [];
+    let mouseX = 0;
+    let mouseY = 0;
+    const starCount = 300;
+    const orbitRadius = 50;
+    const activationRadius = 100;
+
+    // 创建星星
+    for (let i = 0; i < starCount; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        Object.assign(star.style, {
+            left: Math.random() * window.innerWidth + 'px',
+            top: Math.random() * window.innerHeight + 'px',
+            opacity: Math.random() * 0.8 + 0.2
+        });
+        document.body.appendChild(star);
+        stars.push({
+            element: star,
+            baseX: parseFloat(star.style.left),
+            baseY: parseFloat(star.style.top),
+            angle: Math.random() * Math.PI * 2
+        });
+    }
+
+    // 鼠标移动监听
+    document.addEventListener('mousemove', (e) => {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+    });
+
+    // 动画循环
+    function animate() {
+        stars.forEach(star => {
+            const dx = star.baseX - mouseX;
+            const dy = star.baseY - mouseY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < activationRadius) {
+                // 公转动画
+                star.angle += 0.05;
+                const x = mouseX + Math.cos(star.angle) * orbitRadius;
+                const y = mouseY + Math.sin(star.angle) * orbitRadius;
+                star.element.style.transform = `translate(${x}px, ${y}px)`;
+                star.element.style.opacity = '1';
+            } else {
+                // 闪烁动画
+                const scale = 0.5 + Math.abs(Math.sin(Date.now() * 0.002)) * 0.5;
+                star.element.style.transform = `translate(${star.baseX}px, ${star.baseY}px) scale(${scale})`;
+                star.element.style.opacity = Math.random() * 0.5 + 0.3;
+            }
+        });
+        requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    // 窗口尺寸变化处理
+    window.addEventListener('resize', () => {
+        stars.forEach(star => {
+            star.baseX = Math.random() * window.innerWidth;
+            star.baseY = Math.random() * window.innerHeight;
+        });
+    });
+});
+</script>
+</body>
+</html>

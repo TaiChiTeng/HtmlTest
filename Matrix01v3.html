@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>数字太极</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix"></canvas>
+
+    <script>
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布尺寸
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 字符配置
+        const chars = ['0', '1'];
+        const fontSize = 20;
+        const columns = Math.floor(canvas.width / fontSize);
+        const drops = [];
+        
+        // 初始化雨滴位置
+        for (let i = 0; i < columns; i++) {
+            drops[i] = canvas.height * Math.random();
+        }
+
+        // 太极图案参数
+        const radius = Math.min(canvas.width, canvas.height) * 0.4;
+        const center = {
+            x: canvas.width / 2,
+            y: canvas.height / 2
+        };
+
+        // 绘制函数
+        function draw() {
+            // 半透明背景
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 设置字体样式
+            ctx.font = fontSize + 'px monospace';
+            
+            // 绘制矩阵数字雨
+            for (let i = 0; i < drops.length; i++) {
+                const x = i * fontSize;
+                const y = drops[i] * fontSize;
+                
+                // 检查是否在太极图案范围内
+                const dx = x - center.x;
+                const dy = y - center.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                
+                // 只在太极图案内绘制
+                if (distance < radius) {
+                    // 根据太极阴阳区域设置颜色
+                    const angle = Math.atan2(dy, dx);
+                    const inYang = (
+                        (distance < radius/2 && angle > -Math.PI/2 && angle < Math.PI/2) ||
+                        (distance >= radius/2 && (angle < -Math.PI/2 || angle > Math.PI/2))
+                    );
+                    
+                    // 设置颜色渐变
+                    const gradient = ctx.createLinearGradient(x, y, x, y + fontSize);
+                    gradient.addColorStop(0, '#00ff00');
+                    gradient.addColorStop(1, inYang ? '#FFFFFF' : '#001100');
+                    ctx.fillStyle = gradient;
+                    
+                    // 绘制字符
+                    ctx.fillText(chars[Math.floor(Math.random() * chars.length)], x, y);
+                }
+                
+                // 重置雨滴位置
+                if (y > canvas.height || Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+            
+            requestAnimationFrame(draw);
+        }
+
+        // 启动动画
+        draw();
+    </script>
+</body>
+</html>
