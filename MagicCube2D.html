@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D视角魔方小游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        danger: '#EF4444',
+                        dark: '#1F2937',
+                        light: '#F3F4F6',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .cube-face {
+                @apply grid grid-cols-3 grid-rows-3 gap-y-[2px] gap-x-[38px] p-[2px] rounded-md shadow-md;
+            }
+            .cube-cell {
+                @apply w-[clamp(24px,5vw,36px)] h-[clamp(24px,5vw,36px)] rounded-sm transition-all duration-300;
+            }
+            .btn-operation {
+                @apply flex-1 min-w-[60px] py-2 px-3 m-1 rounded-md font-semibold transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2;
+            }
+            .btn-operation-primary {
+                @apply bg-primary text-white focus:ring-primary/50;
+            }
+            .btn-operation-secondary {
+                @apply bg-secondary text-white focus:ring-secondary/50;
+            }
+            .btn-control {
+                @apply py-2 px-4 m-2 rounded-md font-semibold transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2;
+            }
+            .btn-control-accent {
+                @apply bg-accent text-white focus:ring-accent/50;
+            }
+            .btn-control-danger {
+                @apply bg-danger text-white focus:ring-danger/50;
+            }
+            .btn-control-info {
+                @apply bg-blue-500 text-white focus:ring-blue-500/50;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- 游戏标题 -->
+        <header class="text-center mb-8">
+            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-dark mb-2">2D视角魔方小游戏</h1>
+            <p class="text-gray-600 mb-4">还原被打乱的魔方，挑战你的空间思维能力！</p>
+            <div id="game-status" class="text-xl font-semibold text-primary"></div>
+        </header>
+
+        <!-- 魔方展示区 -->
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+            <!-- 上面 -->
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-center font-semibold text-gray-700 mb-2">上面 (U)</h3>
+                <div id="up-face" class="cube-face mx-auto bg-gray-200 w-min">
+                    <!-- JS 动态生成单元格 -->
+                </div>
+            </div>
+            
+            <!-- 下面 -->
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-center font-semibold text-gray-700 mb-2">下面 (D)</h3>
+                <div id="down-face" class="cube-face mx-auto bg-gray-200 w-min">
+                    <!-- JS 动态生成单元格 -->
+                </div>
+            </div>
+            
+            <!-- 左面 -->
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-center font-semibold text-gray-700 mb-2">左面 (L)</h3>
+                <div id="left-face" class="cube-face mx-auto bg-gray-200 w-min">
+                    <!-- JS 动态生成单元格 -->
+                </div>
+            </div>
+            
+            <!-- 右面 -->
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-center font-semibold text-gray-700 mb-2">右面 (R)</h3>
+                <div id="right-face" class="cube-face mx-auto bg-gray-200 w-min">
+                    <!-- JS 动态生成单元格 -->
+                </div>
+            </div>
+            
+            <!-- 前面 -->
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-center font-semibold text-gray-700 mb-2">前面 (F)</h3>
+                <div id="front-face" class="cube-face mx-auto bg-gray-200 w-min">
+                    <!-- JS 动态生成单元格 -->
+                </div>
+            </div>
+            
+            <!-- 后面 -->
+            <div class="bg-white p-4 rounded-lg shadow-lg">
+                <h3 class="text-center font-semibold text-gray-700 mb-2">后面 (B)</h3>
+                <div id="back-face" class="cube-face mx-auto bg-gray-200 w-min">
+                    <!-- JS 动态生成单元格 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作记录 -->
+        <div class="bg-white p-4 rounded-lg shadow-lg mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                <h3 class="text-center font-semibold text-gray-700 mb-2 md:mb-0">打乱步骤</h3>
+                <button id="btn-show-answer" class="btn-control btn-control-info">
+                    <i class="fa fa-eye mr-1"></i> 查看答案
+                </button>
+            </div>
+            <div id="shuffle-steps" class="flex flex-wrap justify-center gap-2 mb-4 min-h-[40px]">
+                <span class="text-gray-400 italic">点击"查看答案"显示打乱步骤</span>
+            </div>
+            <h3 class="text-center font-semibold text-gray-700 mb-2">你的操作</h3>
+            <div id="user-steps" class="flex flex-wrap justify-center gap-2 mb-4 min-h-[40px]">
+                <span class="text-gray-400 italic">尚未进行操作</span>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="bg-white p-4 rounded-lg shadow-lg mb-8">
+            <h3 class="text-center font-semibold text-gray-700 mb-4">操作按钮</h3>
+            <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                <button id="btn-F" class="btn-operation btn-operation-primary">F</button>
+                <button id="btn-F'" class="btn-operation btn-operation-secondary">F'</button>
+                <button id="btn-B" class="btn-operation btn-operation-primary">B</button>
+                <button id="btn-B'" class="btn-operation btn-operation-secondary">B'</button>
+                <button id="btn-U" class="btn-operation btn-operation-primary">U</button>
+                <button id="btn-U'" class="btn-operation btn-operation-secondary">U'</button>
+                <button id="btn-D" class="btn-operation btn-operation-primary">D</button>
+                <button id="btn-D'" class="btn-operation btn-operation-secondary">D'</button>
+                <button id="btn-L" class="btn-operation btn-operation-primary">L</button>
+                <button id="btn-L'" class="btn-operation btn-operation-secondary">L'</button>
+                <button id="btn-R" class="btn-operation btn-operation-primary">R</button>
+                <button id="btn-R'" class="btn-operation btn-operation-secondary">R'</button>
+            </div>
+        </div>
+
+        <!-- 控制按钮 -->
+        <div class="flex justify-center">
+            <button id="btn-reset" class="btn-control btn-control-accent">
+                <i class="fa fa-refresh mr-1"></i> 新游戏
+            </button>
+            <button id="btn-undo" class="btn-control btn-control-danger ml-2">
+                <i class="fa fa-undo mr-1"></i> 撤销
+            </button>
+        </div>
+
+        <!-- 模态框 -->
+        <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
+                <h2 id="modal-title" class="text-2xl font-bold text-center mb-4"></h2>
+                <p id="modal-message" class="text-center text-gray-600 mb-6"></p>
+                <div class="flex justify-center">
+                    <button id="btn-modal-close" class="btn-control btn-control-accent">
+                        继续游戏
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 颜色常量
+        const COLORS = {
+            'white': '#FFFFFF',
+            'yellow': '#FFFF00',
+            'red': '#FF0000',
+            'orange': '#FFA500',
+            'blue': '#0000FF',
+            'green': '#008000'
+        };
+
+        // 颜色类名映射
+        const COLOR_CLASSES = {
+            'white': 'bg-white border border-gray-200',
+            'yellow': 'bg-yellow-400 border border-yellow-500',
+            'red': 'bg-red-500 border border-red-600',
+            'orange': 'bg-orange-500 border border-orange-600',
+            'blue': 'bg-blue-500 border border-blue-600',
+            'green': 'bg-green-500 border border-green-600'
+        };
+
+        // 初始状态
+        const INITIAL_STATE = {
+            up: Array(9).fill('white'),
+            down: Array(9).fill('yellow'),
+            front: Array(9).fill('red'),
+            back: Array(9).fill('orange'),
+            left: Array(9).fill('blue'),
+            right: Array(9).fill('green')
+        };
+
+        // 当前状态
+        let currentState = JSON.parse(JSON.stringify(INITIAL_STATE));
+        let shuffleSteps = [];
+        let userSteps = [];
+        let gameStarted = false;
+        let answerShown = false;
+
+        // DOM元素
+        const faces = ['up', 'down', 'front', 'back', 'left', 'right'];
+        const operationButtons = ['F', "F'", 'B', "B'", 'U', "U'", 'D', "D'", 'L', "L'", 'R', "R'"];
+
+        // 初始化魔方
+        function initializeCube() {
+            faces.forEach(face => {
+                const faceElement = document.getElementById(`${face}-face`);
+                faceElement.innerHTML = '';
+                
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('div');
+                    cell.id = `${face}-${i}`;
+                    cell.className = `cube-cell ${COLOR_CLASSES[currentState[face][i]]}`;
+                    faceElement.appendChild(cell);
+                }
+            });
+        }
+
+        // 更新魔方显示
+        function updateCubeDisplay() {
+            faces.forEach(face => {
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.getElementById(`${face}-${i}`);
+                    cell.className = `cube-cell ${COLOR_CLASSES[currentState[face][i]]}`;
+                }
+            });
+        }
+
+        // 旋转操作
+        const rotations = {
+            // 前面顺时针旋转
+            'F': () => {
+                // 前面自身旋转
+                [currentState.front[0], currentState.front[1], currentState.front[2], 
+                 currentState.front[3], currentState.front[4], currentState.front[5], 
+                 currentState.front[6], currentState.front[7], currentState.front[8]] = 
+                [currentState.front[6], currentState.front[3], currentState.front[0], 
+                 currentState.front[7], currentState.front[4], currentState.front[1], 
+                 currentState.front[8], currentState.front[5], currentState.front[2]];
+                
+                // 关联面变化
+                [currentState.up[6], currentState.up[7], currentState.up[8],
+                 currentState.right[0], currentState.right[3], currentState.right[6],
+                 currentState.down[2], currentState.down[1], currentState.down[0],
+                 currentState.left[8], currentState.left[5], currentState.left[2]] = 
+                [currentState.left[8], currentState.left[5], currentState.left[2],
+                 currentState.up[6], currentState.up[7], currentState.up[8],
+                 currentState.right[0], currentState.right[3], currentState.right[6],
+                 currentState.down[2], currentState.down[1], currentState.down[0]];
+            },
+            
+            // 前面逆时针旋转
+            "F'": () => {
+                // 前面自身旋转
+                [currentState.front[0], currentState.front[1], currentState.front[2], 
+                 currentState.front[3], currentState.front[4], currentState.front[5], 
+                 currentState.front[6], currentState.front[7], currentState.front[8]] = 
+                [currentState.front[2], currentState.front[5], currentState.front[8], 
+                 currentState.front[1], currentState.front[4], currentState.front[7], 
+                 currentState.front[0], currentState.front[3], currentState.front[6]];
+                
+                // 关联面变化
+                [currentState.up[6], currentState.up[7], currentState.up[8],
+                 currentState.right[0], currentState.right[3], currentState.right[6],
+                 currentState.down[2], currentState.down[1], currentState.down[0],
+                 currentState.left[8], currentState.left[5], currentState.left[2]] = 
+                [currentState.right[0], currentState.right[3], currentState.right[6],
+                 currentState.down[2], currentState.down[1], currentState.down[0],
+                 currentState.left[8], currentState.left[5], currentState.left[2],
+                 currentState.up[6], currentState.up[7], currentState.up[8]];
+            },
+            
+            // 后面顺时针旋转
+            'B': () => {
+                // 后面自身旋转
+                [currentState.back[0], currentState.back[1], currentState.back[2], 
+                 currentState.back[3], currentState.back[4], currentState.back[5], 
+                 currentState.back[6], currentState.back[7], currentState.back[8]] = 
+                [currentState.back[6], currentState.back[3], currentState.back[0], 
+                 currentState.back[7], currentState.back[4], currentState.back[1], 
+                 currentState.back[8], currentState.back[5], currentState.back[2]];
+                
+                // 关联面变化
+                [currentState.up[0], currentState.up[1], currentState.up[2],
+                 currentState.left[0], currentState.left[3], currentState.left[6],
+                 currentState.down[6], currentState.down[7], currentState.down[8],
+                 currentState.right[8], currentState.right[5], currentState.right[2]] = 
+                [currentState.right[8], currentState.right[5], currentState.right[2],
+                 currentState.up[0], currentState.up[1], currentState.up[2],
+                 currentState.left[0], currentState.left[3], currentState.left[6],
+                 currentState.down[6], currentState.down[7], currentState.down[8]];
+            },
+            
+            // 后面逆时针旋转
+            "B'": () => {
+                // 后面自身旋转
+                [currentState.back[0], currentState.back[1], currentState.back[2], 
+                 currentState.back[3], currentState.back[4], currentState.back[5], 
+                 currentState.back[6], currentState.back[7], currentState.back[8]] = 
+                [currentState.back[2], currentState.back[5], currentState.back[8], 
+                 currentState.back[1], currentState.back[4], currentState.back[7], 
+                 currentState.back[0], currentState.back[3], currentState.back[6]];
+                
+                // 关联面变化
+                [currentState.up[0], currentState.up[1], currentState.up[2],
+                 currentState.left[0], currentState.left[3], currentState.left[6],
+                 currentState.down[6], currentState.down[7], currentState.down[8],
+                 currentState.right[8], currentState.right[5], currentState.right[2]] = 
+                [currentState.left[0], currentState.left[3], currentState.left[6],
+                 currentState.down[6], currentState.down[7], currentState.down[8],
+                 currentState.right[8], currentState.right[5], currentState.right[2],
+                 currentState.up[0], currentState.up[1], currentState.up[2]];
+            },
+            
+            // 上面顺时针旋转
+            'U': () => {
+                // 上面自身旋转
+                [currentState.up[0], currentState.up[1], currentState.up[2], 
+                 currentState.up[3], currentState.up[4], currentState.up[5], 
+                 currentState.up[6], currentState.up[7], currentState.up[8]] = 
+                [currentState.up[6], currentState.up[3], currentState.up[0], 
+                 currentState.up[7], currentState.up[4], currentState.up[1], 
+                 currentState.up[8], currentState.up[5], currentState.up[2]];
+                
+                // 关联面变化
+                [currentState.front[0], currentState.front[1], currentState.front[2],
+                 currentState.right[0], currentState.right[1], currentState.right[2],
+                 currentState.back[0], currentState.back[1], currentState.back[2],
+                 currentState.left[0], currentState.left[1], currentState.left[2]] = 
+                [currentState.left[0], currentState.left[1], currentState.left[2],
+                 currentState.front[0], currentState.front[1], currentState.front[2],
+                 currentState.right[0], currentState.right[1], currentState.right[2],
+                 currentState.back[0], currentState.back[1], currentState.back[2]];
+            },
+            
+            // 上面逆时针旋转
+            "U'": () => {
+                // 上面自身旋转
+                [currentState.up[0], currentState.up[1], currentState.up[2], 
+                 currentState.up[3], currentState.up[4], currentState.up[5], 
+                 currentState.up[6], currentState.up[7], currentState.up[8]] = 
+                [currentState.up[2], currentState.up[5], currentState.up[8], 
+                 currentState.up[1], currentState.up[4], currentState.up[7], 
+                 currentState.up[0], currentState.up[3], currentState.up[6]];
+                
+                // 关联面变化
+                [currentState.front[0], currentState.front[1], currentState.front[2],
+                 currentState.right[0], currentState.right[1], currentState.right[2],
+                 currentState.back[0], currentState.back[1], currentState.back[2],
+                 currentState.left[0], currentState.left[1], currentState.left[2]] = 
+                [currentState.right[0], currentState.right[1], currentState.right[2],
+                 currentState.back[0], currentState.back[1], currentState.back[2],
+                 currentState.left[0], currentState.left[1], currentState.left[2],
+                 currentState.front[0], currentState.front[1], currentState.front[2]];
+            },
+            
+            // 下面顺时针旋转
+            'D': () => {
+                // 下面自身旋转
+                [currentState.down[0], currentState.down[1], currentState.down[2], 
+                 currentState.down[3], currentState.down[4], currentState.down[5], 
+                 currentState.down[6], currentState.down[7], currentState.down[8]] = 
+                [currentState.down[6], currentState.down[3], currentState.down[0], 
+                 currentState.down[7], currentState.down[4], currentState.down[1], 
+                 currentState.down[8], currentState.down[5], currentState.down[2]];
+                
+                // 关联面变化
+                [currentState.front[6], currentState.front[7], currentState.front[8],
+                 currentState.right[6], currentState.right[7], currentState.right[8],
+                 currentState.back[6], currentState.back[7], currentState.back[8],
+                 currentState.left[6], currentState.left[7], currentState.left[8]] = 
+                [currentState.right[6], currentState.right[7], currentState.right[8],
+                 currentState.back[6], currentState.back[7], currentState.back[8],
+                 currentState.left[6], currentState.left[7], currentState.left[8],
+                 currentState.front[6], currentState.front[7], currentState.front[8]];
+            },
+            
+            // 下面逆时针旋转
+            "D'": () => {
+                // 下面自身旋转
+                [currentState.down[0], currentState.down[1], currentState.down[2], 
+                 currentState.down[3], currentState.down[4], currentState.down[5], 
+                 currentState.down[6], currentState.down[7], currentState.down[8]] = 
+                [currentState.down[2], currentState.down[5], currentState.down[8], 
+                 currentState.down[1], currentState.down[4], currentState.down[7], 
+                 currentState.down[0], currentState.down[3], currentState.down[6]];
+                
+                // 关联面变化
+                [currentState.front[6], currentState.front[7], currentState.front[8],
+                 currentState.right[6], currentState.right[7], currentState.right[8],
+                 currentState.back[6], currentState.back[7], currentState.back[8],
+                 currentState.left[6], currentState.left[7], currentState.left[8]] = 
+                [currentState.left[6], currentState.left[7], currentState.left[8],
+                 currentState.front[6], currentState.front[7], currentState.front[8],
+                 currentState.right[6], currentState.right[7], currentState.right[8],
+                 currentState.back[6], currentState.back[7], currentState.back[8]];
+            },
+            
+            // 左面顺时针旋转
+            'L': () => {
+                // 左面自身旋转
+                [currentState.left[0], currentState.left[1], currentState.left[2], 
+                 currentState.left[3], currentState.left[4], currentState.left[5], 
+                 currentState.left[6], currentState.left[7], currentState.left[8]] = 
+                [currentState.left[6], currentState.left[3], currentState.left[0], 
+                 currentState.left[7], currentState.left[4], currentState.left[1], 
+                 currentState.left[8], currentState.left[5], currentState.left[2]];
+                
+                // 关联面变化
+                [currentState.up[0], currentState.up[3], currentState.up[6],
+                 currentState.front[0], currentState.front[3], currentState.front[6],
+                 currentState.down[0], currentState.down[3], currentState.down[6],
+                 currentState.back[8], currentState.back[5], currentState.back[2]] = 
+                [currentState.back[8], currentState.back[5], currentState.back[2],
+                 currentState.up[0], currentState.up[3], currentState.up[6],
+                 currentState.front[0], currentState.front[3], currentState.front[6],
+                 currentState.down[0], currentState.down[3], currentState.down[6]];
+            },
+            
+            // 左面逆时针旋转
+            "L'": () => {
+                // 左面自身旋转
+                [currentState.left[0], currentState.left[1], currentState.left[2], 
+                 currentState.left[3], currentState.left[4], currentState.left[5], 
+                 currentState.left[6], currentState.left[7], currentState.left[8]] = 
+                [currentState.left[2], currentState.left[5], currentState.left[8], 
+                 currentState.left[1], currentState.left[4], currentState.left[7], 
+                 currentState.left[0], currentState.left[3], currentState.left[6]];
+                
+                // 关联面变化
+                [currentState.up[0], currentState.up[3], currentState.up[6],
+                 currentState.front[0], currentState.front[3], currentState.front[6],
+                 currentState.down[0], currentState.down[3], currentState.down[6],
+                 currentState.back[8], currentState.back[5], currentState.back[2]] = 
+                [currentState.front[0], currentState.front[3], currentState.front[6],
+                 currentState.down[0], currentState.down[3], currentState.down[6],
+                 currentState.back[8], currentState.back[5], currentState.back[2],
+                 currentState.up[0], currentState.up[3], currentState.up[6]];
+            },
+            
+            // 右面顺时针旋转
+            'R': () => {
+                // 右面自身旋转
+                [currentState.right[0], currentState.right[1], currentState.right[2], 
+                 currentState.right[3], currentState.right[4], currentState.right[5], 
+                 currentState.right[6], currentState.right[7], currentState.right[8]] = 
+                [currentState.right[6], currentState.right[3], currentState.right[0], 
+                 currentState.right[7], currentState.right[4], currentState.right[1], 
+                 currentState.right[8], currentState.right[5], currentState.right[2]];
+                
+                // 关联面变化
+                [currentState.up[2], currentState.up[5], currentState.up[8],
+                 currentState.front[2], currentState.front[5], currentState.front[8],
+                 currentState.down[2], currentState.down[5], currentState.down[8],
+                 currentState.back[6], currentState.back[3], currentState.back[0]] = 
+                [currentState.front[2], currentState.front[5], currentState.front[8],
+                 currentState.down[2], currentState.down[5], currentState.down[8],
+                 currentState.back[6], currentState.back[3], currentState.back[0],
+                 currentState.up[2], currentState.up[5], currentState.up[8]];
+            },
+            
+            // 右面逆时针旋转
+            "R'": () => {
+                // 右面自身旋转
+                [currentState.right[0], currentState.right[1], currentState.right[2], 
+                 currentState.right[3], currentState.right[4], currentState.right[5], 
+                 currentState.right[6], currentState.right[7], currentState.right[8]] = 
+                [currentState.right[2], currentState.right[5], currentState.right[8], 
+                 currentState.right[1], currentState.right[4], currentState.right[7], 
+                 currentState.right[0], currentState.right[3], currentState.right[6]];
+                
+                // 关联面变化
+                [currentState.up[2], currentState.up[5], currentState.up[8],
+                 currentState.front[2], currentState.front[5], currentState.front[8],
+                 currentState.down[2], currentState.down[5], currentState.down[8],
+                 currentState.back[6], currentState.back[3], currentState.back[0]] = 
+                [currentState.back[6], currentState.back[3], currentState.back[0],
+                 currentState.up[2], currentState.up[5], currentState.up[8],
+                 currentState.front[2], currentState.front[5], currentState.front[8],
+                 currentState.down[2], currentState.down[5], currentState.down[8]];
+            }
+        };
+
+        // 执行旋转操作
+        function performRotation(operation) {
+            rotations[operation]();
+            updateCubeDisplay();
+        }
+
+        // 随机打乱魔方
+        function shuffleCube() {
+            currentState = JSON.parse(JSON.stringify(INITIAL_STATE));
+            shuffleSteps = [];
+            answerShown = false;
+            
+            // 随机选择3个操作
+            for (let i = 0; i < 3; i++) {
+                const randomIndex = Math.floor(Math.random() * operationButtons.length);
+                const operation = operationButtons[randomIndex];
+                shuffleSteps.push(operation);
+                performRotation(operation);
+            }
+            
+            // 更新显示
+            updateShuffleStepsDisplay();
+            updateUserStepsDisplay();
+            
+            gameStarted = true;
+            document.getElementById('game-status').textContent = '游戏进行中';
+            document.getElementById('btn-show-answer').innerHTML = '<i class="fa fa-eye mr-1"></i> 查看答案';
+        }
+
+        // 更新打乱步骤显示
+        function updateShuffleStepsDisplay() {
+            const shuffleStepsElement = document.getElementById('shuffle-steps');
+            shuffleStepsElement.innerHTML = '';
+            
+            if (!gameStarted || !answerShown) {
+                shuffleStepsElement.innerHTML = '<span class="text-gray-400 italic">点击"查看答案"显示打乱步骤</span>';
+                return;
+            }
+            
+            if (shuffleSteps.length === 0) {
+                shuffleStepsElement.innerHTML = '<span class="text-gray-400 italic">等待新游戏...</span>';
+                return;
+            }
+            
+            shuffleSteps.forEach(step => {
+                const stepElement = document.createElement('span');
+                stepElement.className = 'px-3 py-1 bg-gray-200 rounded-md font-semibold';
+                stepElement.textContent = step;
+                shuffleStepsElement.appendChild(stepElement);
+            });
+        }
+
+        // 更新用户操作显示
+        function updateUserStepsDisplay() {
+            const userStepsElement = document.getElementById('user-steps');
+            userStepsElement.innerHTML = '';
+            
+            if (userSteps.length === 0) {
+                userStepsElement.innerHTML = '<span class="text-gray-400 italic">尚未进行操作</span>';
+                return;
+            }
+            
+            userSteps.forEach(step => {
+                const stepElement = document.createElement('span');
+                stepElement.className = 'px-3 py-1 bg-primary/20 text-primary rounded-md font-semibold';
+                stepElement.textContent = step;
+                userStepsElement.appendChild(stepElement);
+            });
+        }
+
+        // 检查是否还原
+        function checkSolved() {
+            // 反转打乱步骤得到正确的还原步骤
+            const correctSteps = shuffleSteps.map(step => {
+                if (step.endsWith("'")) {
+                    return step.slice(0, -1);
+                } else {
+                    return step + "'";
+                }
+            }).reverse();
+            
+            // 比较用户步骤和正确步骤
+            if (userSteps.length !== correctSteps.length) {
+                return false;
+            }
+            
+            for (let i = 0; i < userSteps.length; i++) {
+                if (userSteps[i] !== correctSteps[i]) {
+                    return false;
+                }
+            }
+            
+            // 检查魔方状态是否完全还原
+            for (const face in INITIAL_STATE) {
+                for (let i = 0; i < 9; i++) {
+                    if (currentState[face][i] !== INITIAL_STATE[face][i]) {
+                        return false;
+                    }
+                }
+            }
+            
+            return true;
+        }
+
+        // 显示模态框
+        function showModal(title, message) {
+            const modal = document.getElementById('modal');
+            const modalContent = document.getElementById('modal-content');
+            const modalTitle = document.getElementById('modal-title');
+            const modalMessage = document.getElementById('modal-message');
+            
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 隐藏模态框
+        function hideModal() {
+            const modal = document.getElementById('modal');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 显示/隐藏答案
+        function toggleAnswer() {
+            if (!gameStarted) {
+                showModal('游戏未开始', '请先点击"新游戏"按钮开始游戏');
+                return;
+            }
+            
+            answerShown = !answerShown;
+            updateShuffleStepsDisplay();
+            
+            const btnShowAnswer = document.getElementById('btn-show-answer');
+            if (answerShown) {
+                btnShowAnswer.innerHTML = '<i class="fa fa-eye-slash mr-1"></i> 隐藏答案';
+            } else {
+                btnShowAnswer.innerHTML = '<i class="fa fa-eye mr-1"></i> 查看答案';
+            }
+        }
+
+        // 初始化事件监听
+        function initializeEventListeners() {
+            // 操作按钮事件
+            operationButtons.forEach(operation => {
+                const button = document.getElementById(`btn-${operation}`);
+                button.addEventListener('click', () => {
+                    if (!gameStarted) {
+                        showModal('游戏未开始', '请先点击"新游戏"按钮开始游戏');
+                        return;
+                    }
+                    
+                    performRotation(operation);
+                    userSteps.push(operation);
+                    updateUserStepsDisplay();
+                    
+                    // 检查是否还原
+                    if (checkSolved()) {
+                        document.getElementById('game-status').textContent = '恭喜，你已成功还原魔方！';
+                        showModal('通关成功！', '你已成功还原魔方，太棒了！点击"继续游戏"开始新的挑战。');
+                        gameStarted = false;
+                    }
+                });
+            });
+            
+            // 重置按钮事件
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                userSteps = [];
+                shuffleCube();
+            });
+            
+            // 撤销按钮事件
+            document.getElementById('btn-undo').addEventListener('click', () => {
+                if (userSteps.length === 0) {
+                    showModal('无法撤销', '你还没有进行任何操作');
+                    return;
+                }
+                
+                // 获取最后一步操作的逆操作
+                const lastStep = userSteps.pop();
+                const undoStep = lastStep.endsWith("'") ? lastStep.slice(0, -1) : lastStep + "'";
+                
+                // 执行逆操作
+                performRotation(undoStep);
+                updateUserStepsDisplay();
+            });
+            
+            // 显示/隐藏答案按钮事件
+            document.getElementById('btn-show-answer').addEventListener('click', toggleAnswer);
+            
+            // 模态框关闭按钮事件
+            document.getElementById('btn-modal-close').addEventListener('click', hideModal);
+        }
+
+        // 初始化游戏
+        function initializeGame() {
+            initializeCube();
+            initializeEventListeners();
+            updateShuffleStepsDisplay();
+            updateUserStepsDisplay();
+            document.getElementById('game-status').textContent = '点击"新游戏"开始挑战';
+        }
+
+        // 页面加载完成后初始化游戏
+        document.addEventListener('DOMContentLoaded', initializeGame);
+    </script>
+</body>
+</html>
+    
