@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>垃圾分类小游戏</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        recyclable: '#3B82F6',
+                        kitchen: '#10B981',
+                        other: '#9CA3AF',
+                        hazardous: '#EF4444',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .trash-fall {
+                animation: fall linear forwards;
+            }
+            .bucket-hover {
+                transition: all 0.3s ease;
+            }
+            .bucket-hover:hover {
+                transform: translateY(-10px);
+            }
+            .btn-press {
+                transform: scale(0.95);
+                transition: transform 0.2s;
+            }
+            @keyframes fall {
+                from {
+                    transform: translateY(-50px);
+                    opacity: 1;
+                }
+                to {
+                    transform: translateY(600px);
+                    opacity: 0.8;
+                }
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="max-w-4xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+        <!-- 游戏头部 -->
+        <header class="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-center">垃圾分类挑战</h1>
+            <div class="flex justify-between items-center mt-4">
+                <div class="flex items-center gap-4">
+                    <div class="bg-white/20 rounded-lg px-4 py-2 flex items-center gap-2">
+                        <i class="fa fa-clock-o text-xl"></i>
+                        <span id="timer" class="text-xl font-bold">60</span>
+                        <span class="text-sm">秒</span>
+                    </div>
+                    <div class="bg-white/20 rounded-lg px-4 py-2 flex items-center gap-2">
+                        <i class="fa fa-star text-yellow-300 text-xl"></i>
+                        <span id="score" class="text-xl font-bold">0</span>
+                        <span class="text-sm">分</span>
+                    </div>
+                </div>
+                <button id="start-btn" class="bg-white text-indigo-600 px-6 py-2 rounded-full font-bold shadow-lg hover:bg-indigo-100 transition-all duration-300 flex items-center gap-2">
+                    <i class="fa fa-play"></i>
+                    <span>开始游戏</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- 游戏区域 -->
+        <main class="p-6 relative">
+            <div id="game-area" class="h-[500px] bg-gray-50 rounded-xl relative overflow-hidden">
+                <!-- 垃圾桶区域 -->
+                <div id="buckets-container" class="absolute bottom-0 left-0 right-0 flex justify-center gap-4 p-6">
+                    <div class="bucket" data-type="recyclable">
+                        <div class="bg-recyclable/90 rounded-lg p-4 shadow-lg bucket-hover h-32 w-24 flex flex-col items-center justify-between">
+                            <i class="fa fa-recycle text-white text-3xl"></i>
+                            <span class="text-white font-bold text-sm">可回收物</span>
+                        </div>
+                    </div>
+                    <div class="bucket" data-type="kitchen">
+                        <div class="bg-kitchen/90 rounded-lg p-4 shadow-lg bucket-hover h-32 w-24 flex flex-col items-center justify-between">
+                            <i class="fa fa-cutlery text-white text-3xl"></i>
+                            <span class="text-white font-bold text-sm">厨余垃圾</span>
+                        </div>
+                    </div>
+                    <div class="bucket" data-type="other">
+                        <div class="bg-other/90 rounded-lg p-4 shadow-lg bucket-hover h-32 w-24 flex flex-col items-center justify-between">
+                            <i class="fa fa-trash text-white text-3xl"></i>
+                            <span class="text-white font-bold text-sm">其他垃圾</span>
+                        </div>
+                    </div>
+                    <div class="bucket" data-type="hazardous">
+                        <div class="bg-hazardous/90 rounded-lg p-4 shadow-lg bucket-hover h-32 w-24 flex flex-col items-center justify-between">
+                            <i class="fa fa-exclamation-triangle text-white text-3xl"></i>
+                            <span class="text-white font-bold text-sm">有害垃圾</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 按钮区域 -->
+                <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                    <button id="btn-left" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        交换左2
+                    </button>
+                    <button id="btn-middle" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        交换中2
+                    </button>
+                    <button id="btn-right" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        交换右2
+                    </button>
+                </div>
+            </div>
+
+            <!-- 游戏规则 -->
+            <div class="mt-6 bg-indigo-50 rounded-xl p-4">
+                <h2 class="text-lg font-bold text-indigo-700 mb-2">游戏规则</h2>
+                <ul class="text-gray-700 space-y-1">
+                    <li class="flex items-start gap-2">
+                        <i class="fa fa-check-circle text-green-500 mt-1"></i>
+                        <span>每局游戏时间为60秒，垃圾从上方落下</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fa fa-check-circle text-green-500 mt-1"></i>
+                        <span>正确分类得3分并增加1秒时间，错误分类扣1分并减少1秒时间</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fa fa-check-circle text-green-500 mt-1"></i>
+                        <span>使用下方按钮交换垃圾桶位置，接住相应的垃圾</span>
+                    </li>
+                </ul>
+            </div>
+        </main>
+
+        <!-- 游戏结束弹窗 -->
+        <div id="game-over-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 transform transition-all">
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold text-indigo-600 mb-2">游戏结束!</h2>
+                    <p class="text-gray-600 mb-4">你的得分是</p>
+                    <div class="text-4xl font-bold text-indigo-600 mb-6" id="final-score">0</div>
+                    <button id="play-again-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition-all">
+                        再玩一次
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏配置
+        const gameConfig = {
+            timer: 60,
+            score: 0,
+            isPlaying: false,
+            gameInterval: null,
+            trashInterval: null,
+            trashTypes: [
+                { name: '旧书', type: 'recyclable', icon: 'fa-book' },
+                { name: '塑料瓶', type: 'recyclable', icon: 'fa-flask' },
+                { name: '玻璃杯', type: 'recyclable', icon: 'fa-glass' },
+                { name: '铁钉', type: 'recyclable', icon: 'fa-wrench' },
+                { name: '剩饭', type: 'kitchen', icon: 'fa-cutlery' },
+                { name: '果皮', type: 'kitchen', icon: 'fa-leaf' },
+                { name: '菜叶', type: 'kitchen', icon: 'fa-leaf' },
+                { name: '电池', type: 'hazardous', icon: 'fa-battery-full' },
+                { name: '灯管', type: 'hazardous', icon: 'fa-lightbulb-o' },
+                { name: '药品', type: 'hazardous', icon: 'fa-medkit' },
+                { name: '受污染的纸巾', type: 'other', icon: 'fa-file-text-o' },
+                { name: '塑料袋', type: 'other', icon: 'fa-shopping-bag' },
+                { name: '一次性筷子', type: 'other', icon: 'fa-utensils' }
+            ],
+            bucketTypes: ['recyclable', 'kitchen', 'other', 'hazardous']
+        };
+
+        // DOM 元素
+        const startBtn = document.getElementById('start-btn');
+        const timerEl = document.getElementById('timer');
+        const scoreEl = document.getElementById('score');
+        const gameArea = document.getElementById('game-area');
+        const bucketsContainer = document.getElementById('buckets-container');
+        const btnLeft = document.getElementById('btn-left');
+        const btnMiddle = document.getElementById('btn-middle');
+        const btnRight = document.getElementById('btn-right');
+        const gameOverModal = document.getElementById('game-over-modal');
+        const finalScoreEl = document.getElementById('final-score');
+        const playAgainBtn = document.getElementById('play-again-btn');
+
+        // 颜色映射
+        const colorMap = {
+            recyclable: 'bg-recyclable/90',
+            kitchen: 'bg-kitchen/90',
+            other: 'bg-other/90',
+            hazardous: 'bg-hazardous/90'
+        };
+
+        // 图标映射
+        const iconMap = {
+            recyclable: 'fa-recycle',
+            kitchen: 'fa-cutlery',
+            other: 'fa-trash',
+            hazardous: 'fa-exclamation-triangle'
+        };
+
+        // 开始游戏
+        function startGame() {
+            resetGame();
+            gameConfig.isPlaying = true;
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 游戏进行中';
+            btnLeft.disabled = false;
+            btnMiddle.disabled = false;
+            btnRight.disabled = false;
+
+            // 开始倒计时
+            gameConfig.gameInterval = setInterval(() => {
+                gameConfig.timer--;
+                timerEl.textContent = gameConfig.timer;
+                
+                if (gameConfig.timer <= 0) {
+                    endGame();
+                }
+            }, 1000);
+
+            // 开始生成垃圾
+            let trashSpeed = 2000; // 初始速度，毫秒
+            gameConfig.trashInterval = setInterval(() => {
+                createTrash();
+                
+                // 每10秒增加垃圾生成速度
+                if (gameConfig.timer % 10 === 0 && gameConfig.timer > 0) {
+                    trashSpeed = Math.max(800, trashSpeed - 200);
+                    clearInterval(gameConfig.trashInterval);
+                    gameConfig.trashInterval = setInterval(createTrash, trashSpeed);
+                }
+            }, trashSpeed);
+        }
+
+        // 重置游戏
+        function resetGame() {
+            gameConfig.timer = 60;
+            gameConfig.score = 0;
+            timerEl.textContent = gameConfig.timer;
+            scoreEl.textContent = gameConfig.score;
+            
+            // 清空垃圾
+            const trashes = document.querySelectorAll('.trash');
+            trashes.forEach(trash => trash.remove());
+            
+            // 重置垃圾桶位置
+            const buckets = document.querySelectorAll('.bucket');
+            buckets.forEach((bucket, index) => {
+                bucket.dataset.type = gameConfig.bucketTypes[index];
+                const bucketInner = bucket.querySelector('div');
+                bucketInner.className = `${colorMap[gameConfig.bucketTypes[index]]} rounded-lg p-4 shadow-lg bucket-hover h-32 w-24 flex flex-col items-center justify-between`;
+                bucketInner.querySelector('i').className = `fa ${iconMap[gameConfig.bucketTypes[index]]} text-white text-3xl`;
+                bucketInner.querySelector('span').textContent = getBucketName(gameConfig.bucketTypes[index]);
+            });
+        }
+
+        // 创建垃圾元素
+        function createTrash() {
+            if (!gameConfig.isPlaying) return;
+            
+            const randomTrash = gameConfig.trashTypes[Math.floor(Math.random() * gameConfig.trashTypes.length)];
+            const trash = document.createElement('div');
+            trash.className = 'trash absolute flex flex-col items-center justify-center w-16 h-16 rounded-full shadow-lg trash-fall';
+            
+            // 从垃圾桶的横坐标中随机挑选一个
+            const buckets = document.querySelectorAll('.bucket');
+            const randomBucketIndex = Math.floor(Math.random() * buckets.length);
+            const bucket = buckets[randomBucketIndex];
+            const bucketRect = bucket.getBoundingClientRect();
+            const gameAreaRect = gameArea.getBoundingClientRect();
+            
+            // 计算垃圾的横坐标（居中在垃圾桶上方）
+            const leftPos = bucketRect.left + bucketRect.width/2 - 32 - gameAreaRect.left;
+            trash.style.left = `${leftPos}px`;
+            
+            trash.style.animationDuration = `${2 + Math.random() * 2}s`;
+            trash.dataset.type = randomTrash.type;
+            
+            // 设置垃圾颜色
+            trash.classList.add(getTrashColor(randomTrash.type));
+            
+            // 添加图标
+            const icon = document.createElement('i');
+            icon.className = `fa ${randomTrash.icon} text-white text-2xl`;
+            trash.appendChild(icon);
+            
+            // 添加名称
+            const name = document.createElement('span');
+            name.className = 'text-white text-xs mt-1';
+            name.textContent = randomTrash.name;
+            trash.appendChild(name);
+            
+            gameArea.appendChild(trash);
+            
+            // 动画结束后移除垃圾
+            setTimeout(() => {
+                if (trash.parentNode === gameArea) {
+                    gameArea.removeChild(trash);
+                }
+            }, 4000);
+            
+            // 检查碰撞
+            checkCollision(trash);
+        }
+
+        // 检查碰撞
+        function checkCollision(trash) {
+            const checkInterval = setInterval(() => {
+                if (!gameConfig.isPlaying || !trash.parentNode) {
+                    clearInterval(checkInterval);
+                    return;
+                }
+                
+                const trashRect = trash.getBoundingClientRect();
+                const buckets = document.querySelectorAll('.bucket');
+                
+                buckets.forEach(bucket => {
+                    const bucketRect = bucket.getBoundingClientRect();
+                    
+                    // 检查碰撞
+                    if (
+                        trashRect.bottom >= bucketRect.top &&
+                        trashRect.top <= bucketRect.bottom &&
+                        trashRect.right >= bucketRect.left &&
+                        trashRect.left <= bucketRect.right
+                    ) {
+                        clearInterval(checkInterval);
+                        
+                        // 判断分类是否正确
+                        const isCorrect = trash.dataset.type === bucket.dataset.type;
+                        
+                        // 更新分数和时间
+                        updateScore(isCorrect);
+                        
+                        // 显示反馈
+                        showFeedback(trashRect.left, trashRect.top, isCorrect);
+                        
+                        // 移除垃圾
+                        gameArea.removeChild(trash);
+                    }
+                });
+                
+                // 如果垃圾已经落到垃圾桶下方，停止检查
+                if (trashRect.top > gameArea.clientHeight - 100) {
+                    clearInterval(checkInterval);
+                }
+            }, 50);
+        }
+
+        // 更新分数和时间
+        function updateScore(isCorrect) {
+            if (isCorrect) {
+                gameConfig.score += 3;
+                gameConfig.timer += 1;
+                scoreEl.textContent = gameConfig.score;
+                timerEl.textContent = gameConfig.timer;
+                playSound('correct');
+            } else {
+                gameConfig.score = Math.max(0, gameConfig.score - 1);
+                gameConfig.timer = Math.max(0, gameConfig.timer - 1);
+                scoreEl.textContent = gameConfig.score;
+                timerEl.textContent = gameConfig.timer;
+                playSound('wrong');
+                
+                if (gameConfig.timer <= 0) {
+                    endGame();
+                }
+            }
+        }
+
+        // 显示反馈
+        function showFeedback(x, y, isCorrect) {
+            const feedback = document.createElement('div');
+            feedback.className = `absolute text-2xl font-bold ${isCorrect ? 'text-green-500' : 'text-red-500'} opacity-0 transition-opacity duration-500`;
+            feedback.style.left = `${x}px`;
+            feedback.style.top = `${y}px`;
+            feedback.textContent = isCorrect ? '+3' : '-1';
+            
+            gameArea.appendChild(feedback);
+            
+            // 显示动画
+            setTimeout(() => {
+                feedback.style.opacity = '1';
+                feedback.style.transform = 'translateY(-20px)';
+                feedback.style.transition = 'opacity 0.5s, transform 0.5s';
+                
+                // 移除动画
+                setTimeout(() => {
+                    if (feedback.parentNode === gameArea) {
+                        gameArea.removeChild(feedback);
+                    }
+                }, 1000);
+            }, 10);
+        }
+
+        // 结束游戏
+        function endGame() {
+            gameConfig.isPlaying = false;
+            clearInterval(gameConfig.gameInterval);
+            clearInterval(gameConfig.trashInterval);
+            
+            startBtn.disabled = false;
+            startBtn.innerHTML = '<i class="fa fa-play"></i> 开始游戏';
+            btnLeft.disabled = true;
+            btnMiddle.disabled = true;
+            btnRight.disabled = true;
+            
+            // 显示结束弹窗
+            finalScoreEl.textContent = gameConfig.score;
+            gameOverModal.classList.remove('hidden');
+        }
+
+        // 交换垃圾桶位置
+        function swapBuckets(index1, index2) {
+            const buckets = document.querySelectorAll('.bucket');
+            const tempType = buckets[index1].dataset.type;
+            
+            // 交换数据类型
+            buckets[index1].dataset.type = buckets[index2].dataset.type;
+            buckets[index2].dataset.type = tempType;
+            
+            // 更新视觉样式
+            updateBucketStyle(buckets[index1]);
+            updateBucketStyle(buckets[index2]);
+            
+            // 添加交换动画
+            buckets[index1].classList.add('scale-110');
+            buckets[index2].classList.add('scale-110');
+            
+            setTimeout(() => {
+                buckets[index1].classList.remove('scale-110');
+                buckets[index2].classList.remove('scale-110');
+            }, 300);
+        }
+
+        // 更新垃圾桶样式
+        function updateBucketStyle(bucket) {
+            const bucketInner = bucket.querySelector('div');
+            bucketInner.className = `${colorMap[bucket.dataset.type]} rounded-lg p-4 shadow-lg bucket-hover h-32 w-24 flex flex-col items-center justify-between`;
+            bucketInner.querySelector('i').className = `fa ${iconMap[bucket.dataset.type]} text-white text-3xl`;
+            bucketInner.querySelector('span').textContent = getBucketName(bucket.dataset.type);
+        }
+
+        // 获取垃圾桶名称
+        function getBucketName(type) {
+            const names = {
+                recyclable: '可回收物',
+                kitchen: '厨余垃圾',
+                other: '其他垃圾',
+                hazardous: '有害垃圾'
+            };
+            return names[type] || '';
+        }
+
+        // 获取垃圾颜色
+        function getTrashColor(type) {
+            const colors = {
+                recyclable: 'bg-recyclable',
+                kitchen: 'bg-kitchen',
+                other: 'bg-other',
+                hazardous: 'bg-hazardous'
+            };
+            return colors[type] || 'bg-gray-500';
+        }
+
+        // 播放音效（模拟）
+        function playSound(type) {
+            // 实际项目中可以添加音效
+            console.log(`播放${type}音效`);
+        }
+
+        // 事件监听
+        startBtn.addEventListener('click', startGame);
+        playAgainBtn.addEventListener('click', () => {
+            gameOverModal.classList.add('hidden');
+            startGame();
+        });
+
+        btnLeft.addEventListener('click', () => {
+            if (gameConfig.isPlaying) {
+                swapBuckets(0, 1);
+                btnLeft.classList.add('btn-press');
+                setTimeout(() => btnLeft.classList.remove('btn-press'), 200);
+            }
+        });
+
+        btnMiddle.addEventListener('click', () => {
+            if (gameConfig.isPlaying) {
+                swapBuckets(1, 2);
+                btnMiddle.classList.add('btn-press');
+                setTimeout(() => btnMiddle.classList.remove('btn-press'), 200);
+            }
+        });
+
+        btnRight.addEventListener('click', () => {
+            if (gameConfig.isPlaying) {
+                swapBuckets(2, 3);
+                btnRight.classList.add('btn-press');
+                setTimeout(() => btnRight.classList.remove('btn-press'), 200);
+            }
+        });
+    </script>
+</body>
+</html>
+    
