@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>7.7</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Arial Rounded MT Bold', 'Microsoft YaHei', sans-serif;
+            background: radial-gradient(circle at center, #ec9bad, #b7511d);
+            background-attachment: fixed;
+            position: relative;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 10;
+            width: 800px;
+            max-width: 95%;
+            text-align: center;
+        }
+        
+        .slot-machine {
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 
+                        0 0 0 10px #f8c8dc, 
+                        0 0 0 15px #d35400;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .title {
+            color: #ffeb3b;
+            font-size: 36px;
+            text-shadow: 0 0 10px #ff5722;
+            margin-bottom: 20px;
+            letter-spacing: 3px;
+        }
+        
+        .reels-container {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 30px 0;
+            perspective: 1000px;
+        }
+        
+        .reel {
+            width: 150px;
+            height: 200px;
+            background: linear-gradient(45deg, #8e44ad, #3498db);
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8),
+                        0 10px 20px rgba(0, 0, 0, 0.6);
+            border: 5px solid #f1c40f;
+            transform-style: preserve-3d;
+        }
+        
+        .reel-inner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            transition: transform 0.1s linear;
+        }
+        
+        .reel-item {
+            height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 80px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+        }
+        
+        .reel-item:nth-child(odd) {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .reel-item:nth-child(even) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .reel-item.win {
+            color: #f1c40f;
+            text-shadow: 0 0 20px #ff5722;
+            background: rgba(142, 68, 173, 0.6);
+        }
+        
+        .win-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            background: rgba(255, 235, 59, 0.9);
+            color: #d35400;
+            font-size: 50px;
+            font-weight: bold;
+            padding: 20px 40px;
+            border-radius: 15px;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            animation: popIn 1s forwards;
+            animation-delay: 3.2s;
+        }
+        
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            70% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        
+        /* 爱心样式 */
+        .heart {
+            position: absolute;
+            z-index: 1;
+            font-size: 24px;
+            color: #e74c3c;
+            animation: fall linear forwards;
+        }
+        
+        /* 金币样式 */
+        .coin {
+            position: absolute;
+            z-index: 1;
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle at 30% 30%, #ffd700, #daa520);
+            border-radius: 50%;
+            box-shadow: 0 0 10px #ffd700;
+            animation: fall linear forwards, spin 2s linear infinite;
+        }
+        
+        @keyframes fall {
+            to {
+                transform: translateY(100vh);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .controls {
+            margin-top: 20px;
+        }
+        
+        .restart-btn {
+            background: linear-gradient(to bottom, #f1c40f, #f39c12);
+            color: #2c3e50;
+            border: none;
+            padding: 15px 40px;
+            font-size: 22px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+            letter-spacing: 2px;
+        }
+        
+        .restart-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(to bottom, #ffeb3b, #f1c40f);
+        }
+        
+        .firework {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        .instructions {
+            color: white;
+            margin-top: 25px;
+            font-size: 18px;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px;
+            border-radius: 10px;
+        }
+        
+        /* 彩带效果 */
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 20px;
+            background: #f00;
+            top: -20px;
+            animation: confetti-fall 5s linear forwards;
+        }
+        
+        @keyframes confetti-fall {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="slot-machine">
+            <h1 class="title">I 老 虎 You</h1>
+            <div class="reels-container">
+                <div class="reel" id="reel1">
+                    <div class="reel-inner" id="reelInner1"></div>
+                </div>
+                <div class="reel" id="reel2">
+                    <div class="reel-inner" id="reelInner2"></div>
+                </div>
+                <div class="reel" id="reel3">
+                    <div class="reel-inner" id="reelInner3"></div>
+                </div>
+            </div>
+            <div class="win-message" id="winMessage">恭喜妳中奖啦!</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const reelInner1 = document.getElementById('reelInner1');
+            const reelInner2 = document.getElementById('reelInner2');
+            const reelInner3 = document.getElementById('reelInner3');
+            const winMessage = document.getElementById('winMessage');
+            
+            // 转轮符号
+            const symbols = ['🍒', '🍋', '🍇', '🍉', '🍊', '⭐', '🔔', '7', '.'];
+            
+            // 初始化转轮
+            function initReels() {
+                createReelItems(reelInner1);
+                createReelItems(reelInner2);
+                createReelItems(reelInner3);
+            }
+            
+            // 创建转轮项目
+            function createReelItems(reel) {
+                reel.innerHTML = '';
+                // 创建多个项目（包含重复项以产生滚动效果）
+                for (let i = 0; i < 20; i++) {
+                    const item = document.createElement('div');
+                    item.className = 'reel-item';
+                    const symbolIndex = i % symbols.length;
+                    item.textContent = symbols[symbolIndex];
+                    
+                    reel.appendChild(item);
+                }
+            }
+            
+            // 旋转转轮
+            function spinReels() {
+                // 重置转轮位置
+                reelInner1.style.transform = 'translateY(0)';
+                reelInner2.style.transform = 'translateY(0)';
+                reelInner3.style.transform = 'translateY(0)';
+                
+                // 隐藏中奖消息
+                winMessage.style.display = 'none';
+                
+                // 旋转动画
+                const duration = 3000; // 3秒
+                const startTime = Date.now();
+                
+                // 目标位置（确保停在指定符号上）
+                const targetOffset1 = findTargetPosition(reelInner1, '7');
+                const targetOffset2 = findTargetPosition(reelInner2, '.');
+                const targetOffset3 = findTargetPosition(reelInner3, '7');
+                
+                function animate() {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    // 缓出函数
+                    const easeOut = 1 - Math.pow(1 - progress, 3);
+                    
+                    if (progress < 0.8) {
+                        // 快速滚动阶段
+                        const speed = 10;
+                        const offset1 = easeOut * 3000 * speed;
+                        const offset2 = easeOut * 3000 * speed * 1.1;
+                        const offset3 = easeOut * 3000 * speed * 0.9;
+                        
+                        reelInner1.style.transform = `translateY(${-offset1}px)`;
+                        reelInner2.style.transform = `translateY(${-offset2}px)`;
+                        reelInner3.style.transform = `translateY(${-offset3}px)`;
+                    } else {
+                        // 减速并停在目标位置
+                        const slowProgress = (progress - 0.8) * 5; // 映射到0-1
+                        const slowEase = 1 - Math.pow(1 - slowProgress, 3);
+                        
+                        // 计算当前偏移量
+                        const currentOffset1 = parseFloat(reelInner1.style.transform.replace('translateY(', '').replace('px)', '')) || 0;
+                        const currentOffset2 = parseFloat(reelInner2.style.transform.replace('translateY(', '').replace('px)', '')) || 0;
+                        const currentOffset3 = parseFloat(reelInner3.style.transform.replace('translateY(', '').replace('px)', '')) || 0;
+                        
+                        const offset1 = currentOffset1 + (targetOffset1 - Math.abs(currentOffset1)) * slowEase;
+                        const offset2 = currentOffset2 + (targetOffset2 - Math.abs(currentOffset2)) * slowEase;
+                        const offset3 = currentOffset3 + (targetOffset3 - Math.abs(currentOffset3)) * slowEase;
+                        
+                        reelInner1.style.transform = `translateY(${-offset1}px)`;
+                        reelInner2.style.transform = `translateY(${-offset2}px)`;
+                        reelInner3.style.transform = `translateY(${-offset3}px)`;
+                    }
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        // 确保精确停在目标位置
+                        reelInner1.style.transform = `translateY(${-targetOffset1}px)`;
+                        reelInner2.style.transform = `translateY(${-targetOffset2}px)`;
+                        reelInner3.style.transform = `translateY(${-targetOffset3}px)`;
+                        
+                        // 动画结束，显示中奖消息和特效
+                        setTimeout(showWinEffect, 300);
+                    }
+                }
+                
+                requestAnimationFrame(animate);
+            }
+            
+            // 查找目标符号的位置 - 修正版本
+            function findTargetPosition(reel, targetSymbol) {
+                const items = reel.children;
+                let targetIndex = -1;
+                
+                // 查找目标符号的位置
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].textContent === targetSymbol) {
+                        // 确保目标位置在转轮中间
+                        targetIndex = i;
+                        // 调整位置使目标符号在转轮中间显示
+                        break;
+                    }
+                }
+                
+                // 如果没找到，默认使用第一个位置
+                if (targetIndex === -1) targetIndex = 0;
+                
+                // 计算目标位置（使目标符号出现在转轮中间）
+                // 修正：每个项目高度200px，所以偏移量应为 targetIndex * 200
+                return targetIndex * 200;
+            }
+            
+            // 显示中奖效果
+            function showWinEffect() {
+                winMessage.style.display = 'block';
+                
+                // 创建爱心和金币
+                createFallingHearts();
+                createFallingCoins();
+                createConfetti();
+                createFireworks();
+            }
+            
+            // 创建飘落的爱心
+            function createFallingHearts() {
+                for (let i = 0; i < 50; i++) {
+                    setTimeout(() => {
+                        const heart = document.createElement('div');
+                        heart.className = 'heart';
+                        heart.innerHTML = '❤️';
+                        heart.style.left = `${Math.random() * 100}vw`;
+                        heart.style.top = '-50px';
+                        heart.style.fontSize = `${20 + Math.random() * 30}px`;
+                        heart.style.animationDuration = `${3 + Math.random() * 5}s`;
+                        document.body.appendChild(heart);
+                        
+                        // 动画结束后移除元素
+                        setTimeout(() => {
+                            heart.remove();
+                        }, 6000);
+                    }, i * 200);
+                }
+            }
+            
+            // 创建飘落的金币
+            function createFallingCoins() {
+                for (let i = 0; i < 30; i++) {
+                    setTimeout(() => {
+                        const coin = document.createElement('div');
+                        coin.className = 'coin';
+                        coin.style.left = `${Math.random() * 100}vw`;
+                        coin.style.top = '-50px';
+                        coin.style.width = `${20 + Math.random() * 30}px`;
+                        coin.style.height = coin.style.width;
+                        coin.style.animationDuration = `${4 + Math.random() * 4}s`;
+                        document.body.appendChild(coin);
+                        
+                        // 动画结束后移除元素
+                        setTimeout(() => {
+                            coin.remove();
+                        }, 8000);
+                    }, i * 300);
+                }
+            }
+            
+            // 创建烟花效果
+            function createFireworks() {
+                const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+                
+                for (let i = 0; i < 20; i++) {
+                    setTimeout(() => {
+                        const x = Math.random() * window.innerWidth;
+                        const y = Math.random() * window.innerHeight;
+                        
+                        for (let j = 0; j < 50; j++) {
+                            const particle = document.createElement('div');
+                            particle.className = 'firework';
+                            particle.style.left = `${x}px`;
+                            particle.style.top = `${y}px`;
+                            particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                            
+                            const angle = Math.random() * Math.PI * 2;
+                            const speed = 2 + Math.random() * 3;
+                            const vx = Math.cos(angle) * speed;
+                            const vy = Math.sin(angle) * speed;
+                            
+                            document.body.appendChild(particle);
+                            
+                            let posX = x;
+                            let posY = y;
+                            let opacity = 1;
+                            
+                            function animateParticle() {
+                                posX += vx;
+                                posY += vy;
+                                opacity -= 0.02;
+                                
+                                particle.style.left = `${posX}px`;
+                                particle.style.top = `${posY}px`;
+                                particle.style.opacity = opacity;
+                                
+                                if (opacity > 0) {
+                                    requestAnimationFrame(animateParticle);
+                                } else {
+                                    particle.remove();
+                                }
+                            }
+                            
+                            requestAnimationFrame(animateParticle);
+                        }
+                    }, i * 500);
+                }
+            }
+            
+            // 创建彩色纸屑效果
+            function createConfetti() {
+                const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722'];
+                
+                for (let i = 0; i < 150; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = `${Math.random() * 100}vw`;
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+                    confetti.style.animationDuration = `${3 + Math.random() * 4}s`;
+                    document.body.appendChild(confetti);
+                    
+                    // 动画结束后移除元素
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 7000);
+                }
+            }
+            
+            // 初始化并开始游戏
+            initReels();
+            spinReels();
+        });
+    </script>
+</body>
+</html>
