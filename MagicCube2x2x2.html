@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>极佳手感 2x2 魔方</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #2c3e50;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .controls-tip {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div class="controls-tip">
+            🖱️ <b>左键</b> 拖拽旋转魔方层 &nbsp;|&nbsp; 🖱️ <b>右键</b> 旋转视角
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        let scene, camera, renderer, controls;
+        const cubes = []; 
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        // 魔方参数
+        const CUBE_SIZE = 1;
+        const SPACING = 0.02; 
+        const TOTAL_SIZE = CUBE_SIZE + SPACING;
+        
+        // 交互状态
+        let isDragging = false;
+        let intersect; 
+        let startMouse = { x: 0, y: 0 }; 
+        let moveAxis = null; 
+        let moveScreenVector = null; 
+        let pivot; 
+        let activeGroup = []; 
+        let currentAngle = 0; 
+        
+        const COLORS = {
+            U: 0xFFFFFF, D: 0xFFD500, L: 0x009E60, R: 0x0051BA, F: 0xC41E3A, B: 0xFF5800
+        };
+        const CORE_COLOR = 0x111111;
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x2c3e50);
+
+            // 调整相机位置，因为2x2魔方比较小，稍微拉近一点
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(5, 4, 6); 
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            backLight.position.set(-10, -10, -10);
+            scene.add(backLight);
+
+            // 创建 2x2 魔方
+            createRubiksCube();
+
+            pivot = new THREE.Object3D();
+            pivot.rotation.order = 'XYZ'; 
+            scene.add(pivot);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enablePan = false;
+            controls.mouseButtons = {
+                LEFT: null,
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT: THREE.MOUSE.ROTATE
+            };
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('mousedown', onMouseDown);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+            
+            renderer.domElement.addEventListener('touchstart', onTouchStart, {passive: false});
+            renderer.domElement.addEventListener('touchmove', onTouchMove, {passive: false});
+            window.addEventListener('touchend', onMouseUp);
+        }
+
+        function createRubiksCube() {
+            const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+            
+            // 2x2 的坐标偏移量：-0.5 和 0.5
+            const offsets = [-0.5, 0.5];
+
+            offsets.forEach(x => {
+                offsets.forEach(y => {
+                    offsets.forEach(z => {
+                        const materials = [];
+                        // 颜色判定逻辑修改：根据坐标的正负来决定颜色
+                        materials.push(getFaceMaterial(x > 0 ? COLORS.R : CORE_COLOR)); // Right
+                        materials.push(getFaceMaterial(x < 0 ? COLORS.L : CORE_COLOR)); // Left
+                        materials.push(getFaceMaterial(y > 0 ? COLORS.U : CORE_COLOR)); // Top
+                        materials.push(getFaceMaterial(y < 0 ? COLORS.D : CORE_COLOR)); // Bottom
+                        materials.push(getFaceMaterial(z > 0 ? COLORS.F : CORE_COLOR)); // Front
+                        materials.push(getFaceMaterial(z < 0 ? COLORS.B : CORE_COLOR)); // Back
+
+                        const cube = new THREE.Mesh(geometry, materials);
+                        
+                        // 设置位置
+                        cube.position.set(x * TOTAL_SIZE, y * TOTAL_SIZE, z * TOTAL_SIZE);
+                        
+                        // 存储初始坐标，用于后续计算
+                        cube.userData = { x, y, z, isCube: true }; 
+                        
+                        cubes.push(cube);
+                        scene.add(cube);
+                        
+                        const edges = new THREE.EdgesGeometry(geometry);
+                        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
+                        cube.add(line);
+                    });
+                });
+            });
+        }
+
+        function getFaceMaterial(color) {
+            return new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.6,
+                metalness: 0.1,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1
+            });
+        }
+
+        function onMouseDown(event) {
+            if (event.button !== 0 && event.type !== 'touchstart') return;
+
+            const clientX = event.clientX || event.touches[0].clientX;
+            const clientY = event.clientY || event.touches[0].clientY;
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cubes);
+
+            if (intersects.length > 0) {
+                isDragging = true;
+                intersect = intersects[0];
+                startMouse.x = clientX;
+                startMouse.y = clientY;
+                controls.enabled = false;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!isDragging || !intersect) return;
+
+            const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+            const clientY = event.clientY || (event.touches && event.touches[0].clientY);
+            const dx = clientX - startMouse.x;
+            const dy = clientY - startMouse.y;
+            
+            if (!moveAxis) {
+                if (Math.sqrt(dx * dx + dy * dy) < 8) return;
+                determineRotationAxis(intersect, dx, dy);
+            }
+
+            if (moveAxis) {
+                const dragVector = new THREE.Vector2(dx, dy);
+                const projectedDist = dragVector.dot(moveScreenVector);
+                const ROTATION_SPEED = 0.005; 
+                currentAngle = projectedDist * ROTATION_SPEED;
+                pivot.rotation[moveAxis] = currentAngle;
+            }
+        }
+
+        function onMouseUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            controls.enabled = true;
+
+            if (moveAxis && Math.abs(currentAngle) > 0) {
+                const halfPI = Math.PI / 2;
+                const targetAngle = Math.round(currentAngle / halfPI) * halfPI;
+                snapRotation(targetAngle);
+            } else {
+                resetState();
+            }
+        }
+
+        function onTouchStart(e) { if(e.touches.length===1) { e.preventDefault(); onMouseDown(e); } }
+        function onTouchMove(e) { if(isDragging) { e.preventDefault(); onMouseMove(e); } }
+
+        function getScreenDirection(startPoint, directionVector) {
+            const p1 = startPoint.clone();
+            const p2 = startPoint.clone().add(directionVector);
+
+            p1.project(camera);
+            p2.project(camera);
+
+            const x1 = (p1.x * 0.5 + 0.5) * window.innerWidth;
+            const y1 = -(p1.y * 0.5 + 0.5) * window.innerHeight;
+            const x2 = (p2.x * 0.5 + 0.5) * window.innerWidth;
+            const y2 = -(p2.y * 0.5 + 0.5) * window.innerHeight;
+
+            return new THREE.Vector2(x2 - x1, y2 - y1).normalize();
+        }
+
+        function determineRotationAxis(intersect, dx, dy) {
+            const normal = intersect.face.normal.clone().transformDirection(intersect.object.matrixWorld).round();
+            
+            const axes = [
+                { name: 'x', vector: new THREE.Vector3(1, 0, 0) },
+                { name: 'y', vector: new THREE.Vector3(0, 1, 0) },
+                { name: 'z', vector: new THREE.Vector3(0, 0, 1) }
+            ];
+
+            const point = intersect.point; 
+            let bestMatch = null;
+            let maxDot = -1;
+            const mouseDrag = new THREE.Vector2(dx, dy).normalize();
+
+            axes.forEach(axisObj => {
+                if (Math.abs(normal.dot(axisObj.vector)) > 0.9) return;
+
+                const velocity = axisObj.vector.clone().cross(point);
+                const screenDir = getScreenDirection(point, velocity);
+                const dot = Math.abs(mouseDrag.dot(screenDir));
+
+                if (dot > maxDot) {
+                    maxDot = dot;
+                    bestMatch = {
+                        axis: axisObj.name,
+                        screenDir: screenDir 
+                    };
+                }
+            });
+
+            if (bestMatch) {
+                moveAxis = bestMatch.axis;
+                moveScreenVector = bestMatch.screenDir;
+                
+                const clickPos = intersect.object.position; // 这是被点击方块的中心点
+                activeGroup = cubes.filter(cube => {
+                    // 对于 2x2 魔方，中心点坐标是 +/- 0.5 * TOTAL_SIZE
+                    // 点击的方块和同一层的方块在这个轴上的坐标应该是完全一样的
+                    const delta = 0.1; 
+                    if (moveAxis === 'x') return Math.abs(cube.position.x - clickPos.x) < delta;
+                    if (moveAxis === 'y') return Math.abs(cube.position.y - clickPos.y) < delta;
+                    if (moveAxis === 'z') return Math.abs(cube.position.z - clickPos.z) < delta;
+                    return false;
+                });
+
+                pivot.rotation.set(0, 0, 0);
+                pivot.updateMatrixWorld();
+                activeGroup.forEach(cube => pivot.attach(cube));
+            }
+        }
+
+        function snapRotation(targetAngle) {
+            const startAngle = pivot.rotation[moveAxis];
+            const duration = 200; 
+            const startTime = Date.now();
+
+            function animateSnap() {
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                const ease = progress * (2 - progress);
+                
+                pivot.rotation[moveAxis] = startAngle + (targetAngle - startAngle) * ease;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateSnap);
+                } else {
+                    finishRotation();
+                }
+            }
+            animateSnap();
+        }
+
+        function finishRotation() {
+            pivot.updateMatrixWorld();
+            activeGroup.forEach(cube => {
+                scene.attach(cube);
+                
+                // 坐标归位算法优化（兼容半整数坐标）
+                // Math.round(val * 2) / 2 能够将坐标吸附到 0, 0.5, 1.0 等步长上
+                // 这样既适用于 3x3 (整数)，也适用于 2x2 (半整数)
+                
+                // 计算标准化坐标 (normalized)
+                const snap = (val) => Math.round(val / TOTAL_SIZE * 2) / 2 * TOTAL_SIZE;
+                
+                cube.position.x = snap(cube.position.x);
+                cube.position.y = snap(cube.position.y);
+                cube.position.z = snap(cube.position.z);
+                
+                cube.rotation.x = Math.round(cube.rotation.x / (Math.PI/2)) * (Math.PI/2);
+                cube.rotation.y = Math.round(cube.rotation.y / (Math.PI/2)) * (Math.PI/2);
+                cube.rotation.z = Math.round(cube.rotation.z / (Math.PI/2)) * (Math.PI/2);
+                
+                cube.updateMatrixWorld();
+            });
+            resetState();
+        }
+
+        function resetState() {
+            moveAxis = null;
+            moveScreenVector = null;
+            activeGroup = [];
+            currentAngle = 0;
+            pivot.rotation.set(0,0,0);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
