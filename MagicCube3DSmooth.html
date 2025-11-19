@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>极佳手感 3D 魔方 - 物理力矩修正版</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #2c3e50;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .controls-tip {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div class="controls-tip">
+            🖱️ <b>左键</b> 拖拽旋转魔方层 &nbsp;|&nbsp; 🖱️ <b>右键</b> 旋转视角
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        let scene, camera, renderer, controls;
+        const cubes = []; 
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        
+        const CUBE_SIZE = 1;
+        const SPACING = 0.02; 
+        const TOTAL_SIZE = CUBE_SIZE + SPACING;
+        
+        let isDragging = false;
+        let intersect; 
+        let startMouse = { x: 0, y: 0 }; 
+        let moveAxis = null; 
+        let moveScreenVector = null; 
+        let pivot; 
+        let activeGroup = []; 
+        let currentAngle = 0; 
+        
+        const COLORS = {
+            U: 0xFFFFFF, D: 0xFFD500, L: 0x009E60, R: 0x0051BA, F: 0xC41E3A, B: 0xFF5800
+        };
+        const CORE_COLOR = 0x111111;
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x2c3e50);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(6, 5, 8);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+            const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            backLight.position.set(-10, -10, -10);
+            scene.add(backLight);
+
+            createRubiksCube();
+
+            pivot = new THREE.Object3D();
+            pivot.rotation.order = 'XYZ'; 
+            scene.add(pivot);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enablePan = false;
+            controls.mouseButtons = {
+                LEFT: null,
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT: THREE.MOUSE.ROTATE
+            };
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('mousedown', onMouseDown);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+            
+            renderer.domElement.addEventListener('touchstart', onTouchStart, {passive: false});
+            renderer.domElement.addEventListener('touchmove', onTouchMove, {passive: false});
+            window.addEventListener('touchend', onMouseUp);
+        }
+
+        function createRubiksCube() {
+            const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+            for (let x = -1; x <= 1; x++) {
+                for (let y = -1; y <= 1; y++) {
+                    for (let z = -1; z <= 1; z++) {
+                        const materials = [];
+                        materials.push(getFaceMaterial(x === 1 ? COLORS.R : CORE_COLOR));
+                        materials.push(getFaceMaterial(x === -1 ? COLORS.L : CORE_COLOR));
+                        materials.push(getFaceMaterial(y === 1 ? COLORS.U : CORE_COLOR));
+                        materials.push(getFaceMaterial(y === -1 ? COLORS.D : CORE_COLOR));
+                        materials.push(getFaceMaterial(z === 1 ? COLORS.F : CORE_COLOR));
+                        materials.push(getFaceMaterial(z === -1 ? COLORS.B : CORE_COLOR));
+
+                        const cube = new THREE.Mesh(geometry, materials);
+                        cube.position.set(x * TOTAL_SIZE, y * TOTAL_SIZE, z * TOTAL_SIZE);
+                        cube.userData = { x, y, z, isCube: true }; 
+                        cubes.push(cube);
+                        scene.add(cube);
+                        
+                        const edges = new THREE.EdgesGeometry(geometry);
+                        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
+                        cube.add(line);
+                    }
+                }
+            }
+        }
+
+        function getFaceMaterial(color) {
+            return new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.6,
+                metalness: 0.1,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1
+            });
+        }
+
+        function onMouseDown(event) {
+            if (event.button !== 0 && event.type !== 'touchstart') return;
+
+            const clientX = event.clientX || event.touches[0].clientX;
+            const clientY = event.clientY || event.touches[0].clientY;
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cubes);
+
+            if (intersects.length > 0) {
+                isDragging = true;
+                intersect = intersects[0];
+                startMouse.x = clientX;
+                startMouse.y = clientY;
+                controls.enabled = false;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!isDragging || !intersect) return;
+
+            const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+            const clientY = event.clientY || (event.touches && event.touches[0].clientY);
+            const dx = clientX - startMouse.x;
+            const dy = clientY - startMouse.y;
+            
+            // 1. 确定旋转轴
+            if (!moveAxis) {
+                if (Math.sqrt(dx * dx + dy * dy) < 8) return; // 防抖
+                determineRotationAxis(intersect, dx, dy);
+            }
+
+            // 2. 计算旋转
+            if (moveAxis) {
+                const dragVector = new THREE.Vector2(dx, dy);
+                
+                // 核心修正：
+                // dragVector 是鼠标移动
+                // moveScreenVector 是"轴正旋1度"在屏幕上产生的位移方向
+                // 如果两者的点积为正，说明鼠标顺着正旋方向动 -> 正角度
+                // 如果两者的点积为负，说明鼠标逆着正旋方向动 -> 负角度
+                // 这自动解决了正反面、倒置、侧视等所有方向问题
+                
+                const projectedDist = dragVector.dot(moveScreenVector);
+                
+                const ROTATION_SPEED = 0.005; 
+                currentAngle = projectedDist * ROTATION_SPEED;
+                
+                pivot.rotation[moveAxis] = currentAngle;
+            }
+        }
+
+        function onMouseUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            controls.enabled = true;
+
+            if (moveAxis && Math.abs(currentAngle) > 0) {
+                const halfPI = Math.PI / 2;
+                const targetAngle = Math.round(currentAngle / halfPI) * halfPI;
+                snapRotation(targetAngle);
+            } else {
+                resetState();
+            }
+        }
+
+        function onTouchStart(e) { if(e.touches.length===1) { e.preventDefault(); onMouseDown(e); } }
+        function onTouchMove(e) { if(isDragging) { e.preventDefault(); onMouseMove(e); } }
+
+        // --- 辅助函数：将3D向量投影到屏幕2D向量 ---
+        function getScreenDirection(startPoint, directionVector) {
+            const p1 = startPoint.clone();
+            const p2 = startPoint.clone().add(directionVector);
+
+            p1.project(camera);
+            p2.project(camera);
+
+            const x1 = (p1.x * 0.5 + 0.5) * window.innerWidth;
+            const y1 = -(p1.y * 0.5 + 0.5) * window.innerHeight;
+            const x2 = (p2.x * 0.5 + 0.5) * window.innerWidth;
+            const y2 = -(p2.y * 0.5 + 0.5) * window.innerHeight;
+
+            return new THREE.Vector2(x2 - x1, y2 - y1).normalize();
+        }
+
+        // --- 核心智能逻辑 (物理力矩版) ---
+        function determineRotationAxis(intersect, dx, dy) {
+            // 1. 获取点击面的法线（用于过滤不可能旋转的轴）
+            const normal = intersect.face.normal.clone().transformDirection(intersect.object.matrixWorld).round();
+            
+            // 2. 定义三个基础轴向量
+            const axes = [
+                { name: 'x', vector: new THREE.Vector3(1, 0, 0) },
+                { name: 'y', vector: new THREE.Vector3(0, 1, 0) },
+                { name: 'z', vector: new THREE.Vector3(0, 0, 1) }
+            ];
+
+            const point = intersect.point; // 点击在世界坐标系中的位置
+            let bestMatch = null;
+            let maxDot = -1;
+            const mouseDrag = new THREE.Vector2(dx, dy).normalize();
+
+            // 3. 遍历三个轴，找到最符合用户鼠标轨迹的那个
+            axes.forEach(axisObj => {
+                // 过滤：如果旋转轴和面法线平行，则无法旋转该面（例如点击顶面不能绕Y轴转）
+                if (Math.abs(normal.dot(axisObj.vector)) > 0.9) return;
+
+                // 关键物理计算：
+                // 计算绕该轴旋转时的“瞬时线速度方向”
+                // 公式：Velocity = RotationAxis x PositionVector
+                // 这告诉我们：如果绕这个轴正向旋转，点击的这个点会往哪里飞
+                const velocity = axisObj.vector.clone().cross(point);
+
+                // 将这个3D速度投影到屏幕上
+                const screenDir = getScreenDirection(point, velocity);
+
+                // 检查鼠标移动方向与这个屏幕速度方向的重合度（点积绝对值）
+                const dot = Math.abs(mouseDrag.dot(screenDir));
+
+                if (dot > maxDot) {
+                    maxDot = dot;
+                    bestMatch = {
+                        axis: axisObj.name,
+                        screenDir: screenDir // 存下这个方向，用于后续计算符号
+                    };
+                }
+            });
+
+            if (bestMatch) {
+                moveAxis = bestMatch.axis;
+                moveScreenVector = bestMatch.screenDir;
+                
+                // 4. 分组方块 (吸附到 pivot)
+                const clickPos = intersect.object.position;
+                activeGroup = cubes.filter(cube => {
+                    const delta = 0.1; 
+                    if (moveAxis === 'x') return Math.abs(cube.position.x - clickPos.x) < delta;
+                    if (moveAxis === 'y') return Math.abs(cube.position.y - clickPos.y) < delta;
+                    if (moveAxis === 'z') return Math.abs(cube.position.z - clickPos.z) < delta;
+                    return false;
+                });
+
+                pivot.rotation.set(0, 0, 0);
+                pivot.updateMatrixWorld();
+                activeGroup.forEach(cube => pivot.attach(cube));
+            }
+        }
+
+        function snapRotation(targetAngle) {
+            const startAngle = pivot.rotation[moveAxis];
+            const duration = 200; 
+            const startTime = Date.now();
+
+            function animateSnap() {
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                const ease = progress * (2 - progress);
+                
+                pivot.rotation[moveAxis] = startAngle + (targetAngle - startAngle) * ease;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateSnap);
+                } else {
+                    finishRotation();
+                }
+            }
+            animateSnap();
+        }
+
+        function finishRotation() {
+            pivot.updateMatrixWorld();
+            activeGroup.forEach(cube => {
+                scene.attach(cube);
+                cube.position.x = Math.round(cube.position.x / TOTAL_SIZE) * TOTAL_SIZE;
+                cube.position.y = Math.round(cube.position.y / TOTAL_SIZE) * TOTAL_SIZE;
+                cube.position.z = Math.round(cube.position.z / TOTAL_SIZE) * TOTAL_SIZE;
+                cube.rotation.x = Math.round(cube.rotation.x / (Math.PI/2)) * (Math.PI/2);
+                cube.rotation.y = Math.round(cube.rotation.y / (Math.PI/2)) * (Math.PI/2);
+                cube.rotation.z = Math.round(cube.rotation.z / (Math.PI/2)) * (Math.PI/2);
+                cube.updateMatrixWorld();
+            });
+            resetState();
+        }
+
+        function resetState() {
+            moveAxis = null;
+            moveScreenVector = null;
+            activeGroup = [];
+            currentAngle = 0;
+            pivot.rotation.set(0,0,0);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 魔方模拟 - Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #222; font-family: sans-serif; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px black;
+            font-size: 18px;
+        }
+        #instructions {
+            font-size: 14px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="info">
+        <strong>3D 魔方模拟</strong><br>
+        <span id="instructions">鼠标左键：滑动旋转魔方层 | 鼠标右键：旋转视角</span>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+        // --- 全局变量 ---
+        let scene, camera, renderer, controls;
+        let cubes = []; // 存储所有27个小方块
+        let isRotating = false; // 动画锁，防止旋转时重复操作
+        
+        // 交互相关
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let startMouse = new THREE.Vector2();
+        let intersectedCube = null;
+        let intersectedFaceNormal = null;
+
+        // 魔方参数
+        const CUBE_SIZE = 1;
+        const SPACING = 0.02; // 间隙
+        const TOTAL_SIZE = CUBE_SIZE + SPACING;
+
+        // 颜色定义 (右, 左, 上, 下, 前, 后)
+        const COLORS = [
+            0xB90000, // Right (Red)
+            0xFF5900, // Left (Orange)
+            0xFFFFFF, // Up (White)
+            0xFFD500, // Down (Yellow)
+            0x009E60, // Front (Green)
+            0x0045AD  // Back (Blue)
+        ];
+        const BLACK = 0x222222;
+
+        init();
+        animate();
+
+        function init() {
+            // 1. 场景设置
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x333333);
+
+            // 2. 相机
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(6, 5, 8);
+            camera.lookAt(0, 0, 0);
+
+            // 3. 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // 4. 控制器 (OrbitControls)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            // *** 关键设置：将旋转操作绑定到右键，禁用左键旋转 ***
+            controls.mouseButtons = {
+                LEFT: null, // 左键留给我们自定义的魔方旋转逻辑
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT: THREE.MOUSE.ROTATE
+            };
+
+            // 5. 灯光
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            // 6. 生成魔方
+            createRubiksCube();
+
+            // 7. 事件监听
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('pointerdown', onPointerDown);
+            renderer.domElement.addEventListener('pointerup', onPointerUp);
+        }
+
+        function createRubiksCube() {
+            // 使用圆角立方体看起来更真实
+            const geometry = new RoundedBoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE, 4, 0.1);
+
+            for (let x = -1; x <= 1; x++) {
+                for (let y = -1; y <= 1; y++) {
+                    for (let z = -1; z <= 1; z++) {
+                        // 材质数组：右左上下前后
+                        const materials = [];
+                        // 只有当面朝外时才给颜色，内部面给黑色
+                        materials.push(new THREE.MeshStandardMaterial({ color: x === 1 ? COLORS[0] : BLACK, roughness: 0.4 }));
+                        materials.push(new THREE.MeshStandardMaterial({ color: x === -1 ? COLORS[1] : BLACK, roughness: 0.4 }));
+                        materials.push(new THREE.MeshStandardMaterial({ color: y === 1 ? COLORS[2] : BLACK, roughness: 0.4 }));
+                        materials.push(new THREE.MeshStandardMaterial({ color: y === -1 ? COLORS[3] : BLACK, roughness: 0.4 }));
+                        materials.push(new THREE.MeshStandardMaterial({ color: z === 1 ? COLORS[4] : BLACK, roughness: 0.4 }));
+                        materials.push(new THREE.MeshStandardMaterial({ color: z === -1 ? COLORS[5] : BLACK, roughness: 0.4 }));
+
+                        const mesh = new THREE.Mesh(geometry, materials);
+                        
+                        // 设置初始位置
+                        mesh.position.set(x * TOTAL_SIZE, y * TOTAL_SIZE, z * TOTAL_SIZE);
+                        
+                        // 存储逻辑坐标以便查找
+                        mesh.userData = { x, y, z, isCubie: true }; 
+                        
+                        scene.add(mesh);
+                        cubes.push(mesh);
+                    }
+                }
+            }
+        }
+
+        // --- 交互逻辑 ---
+
+        function onPointerDown(event) {
+            if (isRotating || event.button !== 0) return; // 只响应左键且不在动画中
+
+            // 计算鼠标位置 (-1 到 1)
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cubes);
+
+            if (intersects.length > 0) {
+                intersectedCube = intersects[0].object;
+                intersectedFaceNormal = intersects[0].face.normal.clone();
+                // 转换法线到世界坐标（处理旋转后的情况）
+                intersectedFaceNormal.transformDirection(intersectedCube.matrixWorld).round();
+                
+                startMouse.set(event.clientX, event.clientY);
+            } else {
+                intersectedCube = null;
+            }
+        }
+
+        function onPointerUp(event) {
+            if (isRotating || !intersectedCube || event.button !== 0) return;
+
+            const endMouse = new THREE.Vector2(event.clientX, event.clientY);
+            const delta = new THREE.Vector2().subVectors(endMouse, startMouse);
+
+            // 如果拖动距离太短，视为点击，不旋转
+            if (delta.length() < 15) return;
+
+            // 确定拖动方向 (水平或垂直)
+            let moveAxis = Math.abs(delta.x) > Math.abs(delta.y) ? 'x' : 'y';
+            
+            // 核心逻辑：根据点击的面法线和屏幕滑动方向，推导出要旋转的3D轴
+            // 这是一个简化版的映射逻辑
+            let rotateAxis = '';
+            let direction = 0;
+
+            // 获取法线的绝对值分量
+            const nx = Math.abs(intersectedFaceNormal.x);
+            const ny = Math.abs(intersectedFaceNormal.y);
+            const nz = Math.abs(intersectedFaceNormal.z);
+
+            // 简单的屏幕映射逻辑：
+            if (nx > 0.5) { // 点击的是左/右面
+                if (moveAxis === 'x') { rotateAxis = 'z'; direction = -Math.sign(delta.x) * Math.sign(intersectedFaceNormal.x); } // 这里Z轴方向可能需要根据视口微调
+                else { rotateAxis = 'y'; direction = Math.sign(delta.y) * Math.sign(intersectedFaceNormal.x); } // 修正：垂直滑动绕Y轴与X法线无关? 其实是Z
+                // 修正逻辑：
+                // 在右面(X+)，向上滑(Screen Y-) -> 绕 Z 轴逆时针
+                if (moveAxis === 'y') { rotateAxis = 'z'; direction = -Math.sign(delta.y) * Math.sign(intersectedFaceNormal.x); }
+                if (moveAxis === 'x') { rotateAxis = 'y'; direction = Math.sign(delta.x); }
+            } 
+            else if (ny > 0.5) { // 点击的是上/下面
+                if (moveAxis === 'y') { rotateAxis = 'x'; direction = Math.sign(delta.y) * Math.sign(intersectedFaceNormal.y); }
+                if (moveAxis === 'x') { rotateAxis = 'z'; direction = -Math.sign(delta.x) * Math.sign(intersectedFaceNormal.y); }
+            } 
+            else if (nz > 0.5) { // 点击的是前/后面
+                 if (moveAxis === 'x') { rotateAxis = 'y'; direction = Math.sign(delta.x) * Math.sign(intersectedFaceNormal.z); }
+                 if (moveAxis === 'y') { rotateAxis = 'x'; direction = Math.sign(delta.y) * Math.sign(intersectedFaceNormal.z); }
+            }
+
+            if (rotateAxis) {
+                rotateSlice(intersectedCube, rotateAxis, direction);
+            }
+
+            intersectedCube = null;
+        }
+
+        function rotateSlice(refCube, axis, direction) {
+            isRotating = true;
+
+            // 1. 找出所有属于同一层的小方块
+            const selection = [];
+            const epsilon = 0.1;
+            const refPos = refCube.position.clone();
+
+            cubes.forEach(cube => {
+                if (axis === 'x' && Math.abs(cube.position.x - refPos.x) < epsilon) selection.push(cube);
+                else if (axis === 'y' && Math.abs(cube.position.y - refPos.y) < epsilon) selection.push(cube);
+                else if (axis === 'z' && Math.abs(cube.position.z - refPos.z) < epsilon) selection.push(cube);
+            });
+
+            // 2. 创建一个临时父对象(Pivot)来进行旋转
+            const pivot = new THREE.Object3D();
+            pivot.rotation.set(0, 0, 0);
+            pivot.updateMatrixWorld();
+            scene.add(pivot);
+
+            // 将选中的方块添加到 pivot，同时保持世界坐标不变
+            selection.forEach(cube => {
+                pivot.attach(cube);
+            });
+
+            // 3. 动画旋转 90度 (Half Pi)
+            const targetRotation = Math.PI / 2 * direction;
+            const axisVector = new THREE.Vector3(axis === 'x'?1:0, axis === 'y'?1:0, axis === 'z'?1:0);
+            
+            let progress = 0;
+            const speed = 0.15; // 旋转速度
+
+            function animateRotation() {
+                if (progress < 1) {
+                    progress += speed;
+                    if (progress > 1) progress = 1;
+                    
+                    // 使用四元数平滑旋转
+                    pivot.setRotationFromAxisAngle(axisVector, targetRotation * progress);
+                    pivot.updateMatrixWorld();
+                    
+                    requestAnimationFrame(animateRotation);
+                } else {
+                    // 4. 动画结束，清理
+                    pivot.updateMatrixWorld();
+                    // 将方块从 pivot 拿回 scene，保持变换
+                    selection.forEach(cube => {
+                        scene.attach(cube);
+                        // *** 关键：修正浮点误差，对齐网格 ***
+                        cube.position.x = Math.round(cube.position.x / TOTAL_SIZE) * TOTAL_SIZE;
+                        cube.position.y = Math.round(cube.position.y / TOTAL_SIZE) * TOTAL_SIZE;
+                        cube.position.z = Math.round(cube.position.z / TOTAL_SIZE) * TOTAL_SIZE;
+                        
+                        // 规范化旋转角度为 90度的倍数
+                        const euler = new THREE.Euler().setFromQuaternion(cube.quaternion);
+                        cube.rotation.set(
+                            Math.round(euler.x / (Math.PI/2)) * (Math.PI/2),
+                            Math.round(euler.y / (Math.PI/2)) * (Math.PI/2),
+                            Math.round(euler.z / (Math.PI/2)) * (Math.PI/2)
+                        );
+                        cube.updateMatrix();
+                    });
+                    
+                    scene.remove(pivot);
+                    isRotating = false;
+                }
+                renderer.render(scene, camera);
+            }
+            animateRotation();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
