@@ -28,6 +28,40 @@
             border-radius: 20px;
             display: inline-block;
         }
+        /* 新增按钮样式 */
+        #ui-controls {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none; /* 让容器穿透点击，只让按钮响应 */
+        }
+        .btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 30px;
+            padding: 12px 24px;
+            margin: 0 10px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s, background 0.2s;
+        }
+        .btn:active {
+            transform: scale(0.95);
+        }
+        .btn:hover {
+            background: #ffffff;
+        }
+        .btn-scramble {
+            color: #d35400;
+        }
+        .btn-reset {
+            color: #27ae60;
+        }
     </style>
 </head>
 <body>
@@ -37,12 +71,18 @@
         </div>
     </div>
 
+    <!-- 新增按钮容器 -->
+    <div id="ui-controls">
+        <button class="btn btn-scramble" onclick="scrambleCube()">🔀 打乱魔方</button>
+        <button class="btn btn-reset" onclick="resetCube()">🔄 还原魔方</button>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
         let scene, camera, renderer, controls;
-        const cubes = []; 
+        let cubes = []; 
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         
@@ -60,6 +100,7 @@
         let pivot; 
         let activeGroup = []; 
         let currentAngle = 0; 
+        let isAnimating = false; // 防止在打乱动画时进行操作
         
         const COLORS = {
             U: 0xFFFFFF, D: 0xFFD500, L: 0x009E60, R: 0x0051BA, F: 0xC41E3A, B: 0xFF5800
@@ -73,7 +114,6 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x2c3e50);
 
-            // 调整相机位置，因为2x2魔方比较小，稍微拉近一点
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(5, 4, 6); 
             camera.lookAt(0, 0, 0);
@@ -92,7 +132,6 @@
             backLight.position.set(-10, -10, -10);
             scene.add(backLight);
 
-            // 创建 2x2 魔方
             createRubiksCube();
 
             pivot = new THREE.Object3D();
@@ -120,29 +159,26 @@
         }
 
         function createRubiksCube() {
+            // 清理旧魔方（如果有）
+            cubes.forEach(cube => scene.remove(cube));
+            cubes = [];
+
             const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-            
-            // 2x2 的坐标偏移量：-0.5 和 0.5
             const offsets = [-0.5, 0.5];
 
             offsets.forEach(x => {
                 offsets.forEach(y => {
                     offsets.forEach(z => {
                         const materials = [];
-                        // 颜色判定逻辑修改：根据坐标的正负来决定颜色
-                        materials.push(getFaceMaterial(x > 0 ? COLORS.R : CORE_COLOR)); // Right
-                        materials.push(getFaceMaterial(x < 0 ? COLORS.L : CORE_COLOR)); // Left
-                        materials.push(getFaceMaterial(y > 0 ? COLORS.U : CORE_COLOR)); // Top
-                        materials.push(getFaceMaterial(y < 0 ? COLORS.D : CORE_COLOR)); // Bottom
-                        materials.push(getFaceMaterial(z > 0 ? COLORS.F : CORE_COLOR)); // Front
-                        materials.push(getFaceMaterial(z < 0 ? COLORS.B : CORE_COLOR)); // Back
+                        materials.push(getFaceMaterial(x > 0 ? COLORS.R : CORE_COLOR));
+                        materials.push(getFaceMaterial(x < 0 ? COLORS.L : CORE_COLOR));
+                        materials.push(getFaceMaterial(y > 0 ? COLORS.U : CORE_COLOR));
+                        materials.push(getFaceMaterial(y < 0 ? COLORS.D : CORE_COLOR));
+                        materials.push(getFaceMaterial(z > 0 ? COLORS.F : CORE_COLOR));
+                        materials.push(getFaceMaterial(z < 0 ? COLORS.B : CORE_COLOR));
 
                         const cube = new THREE.Mesh(geometry, materials);
-                        
-                        // 设置位置
                         cube.position.set(x * TOTAL_SIZE, y * TOTAL_SIZE, z * TOTAL_SIZE);
-                        
-                        // 存储初始坐标，用于后续计算
                         cube.userData = { x, y, z, isCube: true }; 
                         
                         cubes.push(cube);
@@ -167,8 +203,75 @@
             });
         }
 
+        // --- 新增功能函数 ---
+
+        // 还原魔方
+        window.resetCube = function() {
+            if (isAnimating) return;
+            createRubiksCube();
+        };
+
+        // 打乱魔方
+        window.scrambleCube = function() {
+            if (isAnimating) return;
+            
+            const axes = ['x', 'y', 'z'];
+            // 2阶魔方的坐标中心点大概是 +/- 0.5 * TOTAL_SIZE
+            // 即 +/- 0.51
+            const layers = [-0.5 * TOTAL_SIZE, 0.5 * TOTAL_SIZE]; 
+            
+            const moveCount = 20; // 打乱步数
+
+            // 瞬间执行打乱，不使用动画，避免等待
+            for (let i = 0; i < moveCount; i++) {
+                const axis = axes[Math.floor(Math.random() * axes.length)];
+                const layerPos = layers[Math.floor(Math.random() * layers.length)];
+                const direction = Math.random() > 0.5 ? 1 : -1; // 顺时针或逆时针
+
+                autoRotateLayer(axis, layerPos, direction * Math.PI / 2);
+            }
+        };
+
+        // 自动旋转某一层（逻辑旋转，无动画）
+        function autoRotateLayer(axis, layerCoord, angle) {
+            // 1. 选组
+            const delta = 0.1;
+            const group = cubes.filter(cube => Math.abs(cube.position[axis] - layerCoord) < delta);
+
+            // 2. 绑定到 pivot
+            pivot.rotation.set(0, 0, 0);
+            pivot.updateMatrixWorld();
+            group.forEach(cube => pivot.attach(cube));
+
+            // 3. 旋转
+            pivot.rotation[axis] = angle;
+            pivot.updateMatrixWorld();
+
+            // 4. 解绑并归位
+            group.forEach(cube => {
+                scene.attach(cube);
+                
+                const snap = (val) => Math.round(val / TOTAL_SIZE * 2) / 2 * TOTAL_SIZE;
+                cube.position.x = snap(cube.position.x);
+                cube.position.y = snap(cube.position.y);
+                cube.position.z = snap(cube.position.z);
+                
+                cube.rotation.x = Math.round(cube.rotation.x / (Math.PI/2)) * (Math.PI/2);
+                cube.rotation.y = Math.round(cube.rotation.y / (Math.PI/2)) * (Math.PI/2);
+                cube.rotation.z = Math.round(cube.rotation.z / (Math.PI/2)) * (Math.PI/2);
+                
+                cube.updateMatrixWorld();
+            });
+            
+            // 5. 重置 pivot
+            pivot.rotation.set(0, 0, 0);
+        }
+
+        // --- 原有交互逻辑 ---
+
         function onMouseDown(event) {
             if (event.button !== 0 && event.type !== 'touchstart') return;
+            if (isAnimating) return; // 动画中禁止操作
 
             const clientX = event.clientX || event.touches[0].clientX;
             const clientY = event.clientY || event.touches[0].clientY;
@@ -216,6 +319,7 @@
             controls.enabled = true;
 
             if (moveAxis && Math.abs(currentAngle) > 0) {
+                isAnimating = true; // 开始自动吸附动画
                 const halfPI = Math.PI / 2;
                 const targetAngle = Math.round(currentAngle / halfPI) * halfPI;
                 snapRotation(targetAngle);
@@ -224,7 +328,7 @@
             }
         }
 
-        function onTouchStart(e) { if(e.touches.length===1) { e.preventDefault(); onMouseDown(e); } }
+        function onTouchStart(e) { if(e.touches.length===1) { /*e.preventDefault();*/ onMouseDown(e); } }
         function onTouchMove(e) { if(isDragging) { e.preventDefault(); onMouseMove(e); } }
 
         function getScreenDirection(startPoint, directionVector) {
@@ -276,10 +380,8 @@
                 moveAxis = bestMatch.axis;
                 moveScreenVector = bestMatch.screenDir;
                 
-                const clickPos = intersect.object.position; // 这是被点击方块的中心点
+                const clickPos = intersect.object.position; 
                 activeGroup = cubes.filter(cube => {
-                    // 对于 2x2 魔方，中心点坐标是 +/- 0.5 * TOTAL_SIZE
-                    // 点击的方块和同一层的方块在这个轴上的坐标应该是完全一样的
                     const delta = 0.1; 
                     if (moveAxis === 'x') return Math.abs(cube.position.x - clickPos.x) < delta;
                     if (moveAxis === 'y') return Math.abs(cube.position.y - clickPos.y) < delta;
@@ -309,6 +411,7 @@
                     requestAnimationFrame(animateSnap);
                 } else {
                     finishRotation();
+                    isAnimating = false; // 动画结束
                 }
             }
             animateSnap();
@@ -319,11 +422,6 @@
             activeGroup.forEach(cube => {
                 scene.attach(cube);
                 
-                // 坐标归位算法优化（兼容半整数坐标）
-                // Math.round(val * 2) / 2 能够将坐标吸附到 0, 0.5, 1.0 等步长上
-                // 这样既适用于 3x3 (整数)，也适用于 2x2 (半整数)
-                
-                // 计算标准化坐标 (normalized)
                 const snap = (val) => Math.round(val / TOTAL_SIZE * 2) / 2 * TOTAL_SIZE;
                 
                 cube.position.x = snap(cube.position.x);

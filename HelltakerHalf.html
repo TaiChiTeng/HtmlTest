@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Helltaker - Level 9 Added</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --ui-red: #ff0044;
+            --ui-white: #e0e0e0;
+            --ui-gold: #ffd700;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--ui-white);
+            font-family: 'Crimson Text', serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 650px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        #top-bar {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            height: 30px;
+        }
+
+        .btn {
+            background: transparent;
+            color: #888;
+            border: 2px solid #444;
+            padding: 4px 10px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 12px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
+        .btn-restart { border-color: var(--ui-red); color: var(--ui-red); }
+        .btn-levels { border-color: #fff; color: #fff; }
+
+        #key-indicator {
+            color: var(--ui-gold);
+            font-size: 18px;
+            display: none;
+            align-items: center;
+            gap: 5px;
+            text-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+            font-weight: bold;
+        }
+        #key-indicator.visible { display: flex; }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 65vh;
+            max-height: 600px;
+            border: 4px solid #2a2a2a;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            background: #1a1a1a;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated; 
+        }
+
+        #ui-bar {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stat-box { font-size: 28px; letter-spacing: 2px; text-shadow: 2px 2px 0 #000; }
+        .highlight { color: var(--ui-red); font-size: 36px; }
+        .controls-hint { font-size: 14px; color: #666; opacity: 0.7; }
+
+        /* --- Modals --- */
+        .modal-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(4px);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            padding: 20px;
+        }
+        .modal-overlay.show { opacity: 1; }
+
+        .modal-box {
+            background: #fff;
+            color: #000;
+            padding: 25px;
+            border: 4px solid #000;
+            text-align: center;
+            width: auto;
+            min-width: 200px;
+            max-width: 90%;
+            box-shadow: 0 0 30px rgba(255, 0, 68, 0.4);
+            transform: scale(0.9);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+
+        .modal-title { 
+            font-size: 24px; color: var(--ui-red); display: block; margin-bottom: 15px; 
+            text-transform: uppercase; line-height: 1.2;
+        }
+        
+        .modal-buttons { 
+            display: flex; justify-content: center; gap: 10px; margin-top: 20px; flex-wrap: wrap; 
+        }
+        
+        .btn-modal { 
+            border: 2px solid #000; background: #fff; color: #000; padding: 8px 16px; 
+            font-size: 16px; cursor: pointer; font-weight: bold; min-width: 60px;
+        }
+        .btn-modal:active { background: #eee; transform: translateY(1px); }
+        .btn-primary { background: #000; color: #fff; }
+
+        #level-list {
+            display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 12px; padding: 5px;
+            margin: 0 auto; max-width: 280px; justify-content: flex-start;
+            scrollbar-width: thin; scrollbar-color: var(--ui-red) #eee; -webkit-overflow-scrolling: touch;
+        }
+        #level-list::-webkit-scrollbar { height: 6px; }
+        #level-list::-webkit-scrollbar-track { background: #eee; }
+        #level-list::-webkit-scrollbar-thumb { background: var(--ui-red); border-radius: 3px; }
+
+        .btn-level-select { 
+            flex: 0 0 auto; width: 50px; height: 50px; font-size: 20px; 
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        @media (max-height: 600px), (max-width: 400px) {
+            #game-container { height: 55vh; }
+            .modal-box { padding: 15px; }
+            .modal-title { font-size: 20px; margin-bottom: 10px; }
+            .btn-level-select { width: 45px; height: 45px; font-size: 18px; }
+            .stat-box { font-size: 20px; }
+            .highlight { font-size: 24px; }
+        }
+
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <div id="top-bar">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-levels" id="btn-levels-ui">LEVELS</button>
+                <div id="key-indicator">🔑 KEY</div>
+            </div>
+            <span style="color:#666; letter-spacing:1px; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 80px;" id="level-indicator">LVL I</span>
+            <button class="btn btn-restart" id="btn-restart-ui">R</button>
+        </div>
+
+        <div id="game-container">
+            <canvas id="gameCanvas"></canvas>
+            
+            <div id="modal-restart" class="modal-overlay">
+                <div class="modal-box">
+                    <span class="modal-title">RESTART?</span>
+                    <div style="font-size:14px; margin-bottom:10px; color:#555;">Progress will be lost</div>
+                    <div class="modal-buttons">
+                        <button class="btn btn-modal btn-primary" id="btn-confirm">YES</button>
+                        <button class="btn btn-modal" id="btn-cancel">NO</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="modal-levels" class="modal-overlay">
+                <div class="modal-box">
+                    <span class="modal-title">SELECT LEVEL</span>
+                    <div id="level-list"></div>
+                    <div class="modal-buttons">
+                        <button class="btn btn-modal" id="btn-cancel-levels">CLOSE</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="modal-dialogue" class="modal-overlay">
+                <div class="modal-box">
+                    <span class="modal-title" id="dia-title">SUCCESS</span>
+                    <div id="dia-text" style="font-style: italic; margin-bottom: 15px; font-size:14px;">"..."</div>
+                    <button class="btn btn-modal btn-primary" id="btn-next">NEXT</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="ui-bar">
+            <div class="stat-box">WILL: <span id="moves-val" class="highlight">23</span></div>
+            <div class="controls-hint">
+                Swipe or Tap Arrows
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * Helltaker Final - Level 9 Added (Judgement)
+ */
+
+// --- Level Data ---
+
+const LEVEL_1 = {
+    title: "LEVEL I", demonName: "Pandemonica", demonLine: "Coffee? I hope you brought some.",
+    map: ["888888888", "888880088", "880000088", "880000888", "800888888", "800000088", "800000008", "888888888"],
+    config: { cols: 9, rows: 8, maxMoves: 23, heroStart: { r: 6, c: 6 }, girls: [{ r: 1, c: 7 }], rocks: [{r:1,c:2}, {r:1,c:4}, {r:2,c:2}, {r:2,c:5}], mobs: [{r:4,c:3}, {r:4,c:5}, {r:5,c:4}], spikes: [], toggleSpikes: [], keys: [], locks: [] }
+};
+const LEVEL_2 = {
+    title: "LEVEL II", demonName: "Modeus", demonLine: "You seem lost. Want to look at my... collection?",
+    map: ["888888888", "880000888", "880800008", "800880008", "800880008", "800880008", "888880008", "888888888"],
+    config: { cols: 9, rows: 8, maxMoves: 24, heroStart: { r: 2, c: 1 }, girls: [{ r: 1, c: 5 }], rocks: [{r:4,c:5}, {r:4,c:6}, {r:4,c:7}], mobs: [{r:1,c:7}, {r:2,c:6}, {r:5,c:2}], spikes: [{r:3,c:6}, {r:4,c:5}, {r:4,c:6}, {r:5,c:4}, {r:5,c:5}, {r:4,c:2}], toggleSpikes: [], keys: [], locks: [] }
+};
+const LEVEL_3 = {
+    title: "LEVEL III", demonName: "Cerberus", demonLine: "Please take us with you! We'll be good!",
+    map: ["8888888888", "8888000088", "8888888088", "8880000008", "8880808008", "8880000088", "8080808088", "8000000088", "8888888888"],
+    config: { cols: 10, rows: 9, maxMoves: 32, heroStart: { r: 5, c: 8 }, girls: [{ r: 7, c: 4 }, { r: 7, c: 5 }, { r: 7, c: 6 }], rocks: [], mobs: [{ r: 1, c: 6 }, { r: 3, c: 5 }], spikes: [{r:2,c:3}, {r:2,c:5}, {r:3,c:6}, {r:3,c:7}, {r:4,c:3}, {r:4,c:5}, {r:5,c:4}, {r:5,c:5}], toggleSpikes: [], keys: [{ r: 2, c: 1 }], locks: [{ r: 6, c: 7 }] }
+};
+const LEVEL_4 = {
+    title: "LEVEL IV", demonName: "Malina", demonLine: "You want to play turn-based strategy games with me?",
+    map: ["8888888888", "8080008888", "8000000088", "8000000008", "8000000008", "8800000888", "8888888888"],
+    config: { cols: 10, rows: 7, maxMoves: 23, heroStart: { r: 5, c: 1 }, girls: [{ r: 3, c: 8 }], keys: [{ r: 5, c: 3 }], locks: [{ r: 4, c: 6 }], spikes: [{ r: 4, c: 3 }, { r: 4, c: 4 }], toggleSpikes: [], mobs: [], rocks: [{r:1,c:3}, {r:1,c:5}, {r:2,c:2}, {r:2,c:4}, {r:2,c:6}, {r:2,c:7}, {r:3,c:1}, {r:3,c:3}, {r:3,c:5}, {r:3,c:6}, {r:4,c:2}, {r:4,c:4}, {r:5,c:5}] }
+};
+const LEVEL_5 = {
+    title: "LEVEL V", demonName: "Zdrada", demonLine: "Took you long enough. I was getting bored.",
+    map: ["88888888", "88880088", "88800008", "80800008", "80800008", "80800008", "80000008", "88888808", "88888888"],
+    config: { cols: 8, rows: 9, maxMoves: 23, heroStart: { r: 5, c: 1 }, girls: [{ r: 7, c: 5 }], keys: [{ r: 1, c: 6 }], locks: [{ r: 6, c: 4 }], mobs: [{ r: 3, c: 1 }], rocks: [{r:3,c:3}, {r:3,c:4}, {r:3,c:5}, {r:3,c:6}, {r:5,c:5}, {r:6,c:5}], spikes: [], toggleSpikes: [{r:2,c:1}, {r:2,c:3}, {r:2,c:6}, {r:4,c:4}, {r:4,c:6}, {r:5,c:3}] }
+};
+const LEVEL_6 = {
+    title: "LEVEL VI", demonName: "Azazel", demonLine: "Fascinating! The concept of a harem is truly unique!",
+    map: ["888888888", "880008888", "880008888", "800008888", "880000888", "880800008", "880000088", "888880008", "888880088", "888888888"],
+    config: { cols: 9, rows: 10, maxMoves: 43, heroStart: { r: 8, c: 3 }, girls: [{ r: 1, c: 6 }], keys: [{ r: 6, c: 4 }], locks: [{ r: 2, c: 5 }], mobs: [{ r: 3, c: 6 }, { r: 4, c: 2 }], rocks: [{r:2,c:6}, {r:3,c:4}, {r:4,c:4}, {r:4,c:5}, {r:5,c:3}, {r:7,c:2}, {r:7,c:3}, {r:7,c:4}], spikes: [], toggleSpikes: [{ r: 5, c: 2 }, { r: 5, c: 3 }] }
+};
+const LEVEL_7 = {
+    title: "LEVEL VII", demonName: "Justice", demonLine: "Yo! Great to see you. Let's skip the puzzle, yeah?",
+    map: ["88888888", "88880088", "88880008", "80080008", "80000008", "80800008", "80880888", "80000888", "88888888"],
+    config: { cols: 8, rows: 9, maxMoves: 32, heroStart: { r: 3, c: 6 }, girls: [{ r: 7, c: 4 }], keys: [{ r: 5, c: 2 }], locks: [{ r: 6, c: 5 }], mobs: [{ r: 3, c: 3 }, { r: 4, c: 1 }, { r: 4, c: 4 }], rocks: [{r:4,c:2}, {r:4,c:5}, {r:5,c:4}, {r:5,c:5}, {r:5,c:6}], spikes: [], toggleSpikes: [{r:1,c:1, startActive: false}, {r:1,c:3, startActive: false}, {r:2,c:4, startActive: false}, {r:1,c:2, startActive: true}, {r:1,c:4, startActive: true}, {r:2,c:1, startActive: true}] }
+};
+const LEVEL_8 = {
+    title: "LEVEL VIII", demonName: "Lucifer", demonLine: "You think you can just walk in here?",
+    map: [
+        "88888888888", "88888088888", "88000000088", "88080008088", "88000000088",
+        "88080008088", "88000000088", "88080008088", "88000000088", "88080008088",
+        "88000000088", "88080008088", "88000000088", "88880008888", "88888888888"
+    ],
+    config: { 
+        cols: 11, rows: 15, maxMoves: 12, cameraFollow: true,
+        heroStart: { r: 3, c: 5 }, girls: [{ r: 13, c: 5 }],
+        rocks: [], keys: [], locks: [], spikes: [], toggleSpikes: [],
+        mobs: [{r:5,c:5}, {r:6,c:5}, {r:7,c:5}, {r:8,c:5}, {r:9,c:5}, {r:10,c:5}, {r:11,c:5}, {r:12,c:5}]
+    }
+};
+const LEVEL_9 = {
+    title: "LEVEL IX", demonName: "Judgement", demonLine: "You have reached the end. Now, SUFFER!",
+    map: [
+        "88888888888", // Row 8
+        "88888088888", // Row 7
+        "88880008888", // Row 6
+        "88880008888", // Row 5
+        "88080008088", // Row 4
+        "80000000008", // Row 3
+        "80000000008", // Row 2
+        "88000000088", // Row 1
+        "88888888888"  // Row 0
+    ],
+    config: {
+        cols: 11, rows: 9, maxMoves: 33,
+        heroStart: { r: 1, c: 2 },
+        girls: [{ r: 7, c: 5 }],
+        keys: [{ r: 3, c: 9 }],
+        locks: [{ r: 5, c: 5 }],
+        mobs: [], spikes: [], toggleSpikes: [],
+        rocks: [
+            {r:1,c:4}, {r:1,c:7},
+            {r:2,c:2}, {r:2,c:3}, {r:2,c:4}, {r:2,c:7}, {r:2,c:8},
+            {r:3,c:1}, {r:3,c:4}, {r:3,c:5}, {r:3,c:6},
+            {r:4,c:2}, {r:4,c:4},
+            {r:5,c:4}, {r:5,c:6}
+        ]
+    }
+};
+
+const LEVELS = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5, LEVEL_6, LEVEL_7, LEVEL_8, LEVEL_9];
+
+// Colors
+const PALETTE = {
+    bg: '#1a1a1a', void: '#0f0f0f',
+    floor1: '#2e2929', floor2: '#262222', wallSide: '#3d3030',
+    heroSkin: '#ffe0bd', heroSuit: '#fff', heroShirt: '#222',
+    demonSkin: '#d6a6a6', demonRed: '#ff0044',
+    bone: '#e0e0e0', rock: '#e3e3e3', spike: '#555',
+    spikeActive: '#a00',
+    key: '#ffd700', lock: '#888',
+    shadow: 'rgba(0,0,0,0.4)'
+};
+
+// --- Engine Core ---
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const elContainer = document.getElementById('game-container');
+const uiMoves = document.getElementById('moves-val');
+const elLevelTitle = document.getElementById('level-indicator');
+const elKeyInd = document.getElementById('key-indicator');
+
+let game = {
+    currentLevelIdx: 0,
+    grid: [], entities: [], particles: [], 
+    spikes: [], toggleSpikes: [], toggleState: 0,
+    player: null,
+    moves: 0, hasKey: false,
+    state: 'PLAYING', beat: 0, lastTime: 0, inputLocked: false,
+    cameraY: 0
+};
+
+// --- Initialization ---
+
+function init() {
+    resize();
+    loadLevel(0);
+    window.requestAnimationFrame(loop);
+}
+
+function resize() {
+    const rect = elContainer.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    if (game.grid.length > 0) draw(); 
+}
+
+function loadLevel(idx) {
+    if (idx < 0 || idx >= LEVELS.length) idx = 0;
+    game.currentLevelIdx = idx;
+    
+    const levelData = LEVELS[idx];
+    const conf = levelData.config;
+    
+    elLevelTitle.innerText = levelData.title;
+
+    game.grid = [];
+    game.entities = [];
+    game.particles = [];
+    game.spikes = [];
+    game.toggleSpikes = [];
+    game.moves = conf.maxMoves;
+    game.hasKey = false;
+    game.state = 'PLAYING';
+    game.beat = 0;
+    game.inputLocked = false;
+    game.toggleState = 0;
+    game.cameraY = 0; 
+    
+    for (let y = 0; y < levelData.map.length; y++) {
+        let row = [];
+        for (let x = 0; x < levelData.map[y].length; x++) {
+            row.push(parseInt(levelData.map[y][x]));
+        }
+        game.grid.push(row);
+    }
+
+    const toCY = (r) => (conf.rows - 1) - r;
+
+    game.player = createEntity(conf.heroStart.c, toCY(conf.heroStart.r), 'hero');
+    game.entities.push(game.player);
+    game.cameraY = game.player.vy;
+
+    if (conf.girls) conf.girls.forEach(p => game.entities.push(createEntity(p.c, toCY(p.r), 'girl')));
+    if (conf.rocks) conf.rocks.forEach(p => game.entities.push(createEntity(p.c, toCY(p.r), 'rock')));
+    if (conf.mobs)  conf.mobs.forEach(p => game.entities.push(createEntity(p.c, toCY(p.r), 'mob')));
+    if (conf.keys)  conf.keys.forEach(p => game.entities.push(createEntity(p.c, toCY(p.r), 'key')));
+    if (conf.locks) conf.locks.forEach(p => game.entities.push(createEntity(p.c, toCY(p.r), 'lock')));
+    
+    if (conf.spikes) conf.spikes.forEach(p => game.spikes.push({x: p.c, y: toCY(p.r)}));
+    if (conf.toggleSpikes) {
+        conf.toggleSpikes.forEach(p => {
+            let startActive = p.startActive === true;
+            game.toggleSpikes.push({x: p.c, y: toCY(p.r), startActive: startActive});
+        });
+    }
+
+    updateUI();
+    hideModals();
+}
+
+function resetGame() { loadLevel(game.currentLevelIdx); }
+function createEntity(x, y, type) { return { x:x, y:y, vx:x, vy:y, type:type, dir:-1, dead:false }; }
+
+// --- Game Logic ---
+
+function getEntitiesAt(x, y) {
+    return game.entities.filter(e => e.x === x && e.y === y && !e.dead);
+}
+
+function isToggleSpikeActive(s) {
+    if (s.startActive) return game.toggleState === 0;
+    else return game.toggleState === 1;
+}
+
+function handleInput(dx, dy) {
+    if (game.state !== 'PLAYING' || game.inputLocked) return;
+    
+    if (dx !== 0) game.player.dir = dx;
+    let tx = game.player.x + dx;
+    let ty = game.player.y + dy;
+    let conf = LEVELS[game.currentLevelIdx].config;
+
+    if (isVoid(tx, ty, conf)) { screenShake(3); return; }
+
+    let targetEntities = getEntitiesAt(tx, ty);
+    let blocker = targetEntities.find(e => ['rock', 'mob', 'lock', 'girl'].includes(e.type));
+    
+    let turnPassed = false;
+    let playerMoves = false;
+    let cost = 1;
+    let nextToggleState = 1 - game.toggleState; 
+
+    if (!blocker) {
+        turnPassed = true;
+        playerMoves = true;
+    } else {
+        if (blocker.type === 'girl') {
+            checkWin(); 
+        } else if (blocker.type === 'lock') {
+            if (game.hasKey) {
+                blocker.dead = true;
+                game.hasKey = false; 
+                spawnSparkles(tx, ty, '#fff');
+                screenShake(5);
+                turnPassed = true;
+                playerMoves = true;
+            } else { screenShake(3); }
+        } else if (blocker.type === 'rock') {
+            let bx = tx + dx; let by = ty + dy;
+            let behindEntities = getEntitiesAt(bx, by);
+            let behindBlocker = behindEntities.find(e => ['rock', 'mob', 'lock', 'girl'].includes(e.type));
+            
+            if (!isVoid(bx, by, conf) && !behindBlocker) {
+                blocker.x = bx; blocker.y = by;
+                spawnDust(tx, ty); 
+                turnPassed = true;
+                playerMoves = false;
+            } else { screenShake(3); }
+        } else if (blocker.type === 'mob') {
+            let bx = tx + dx; let by = ty + dy;
+            let obstacle = isVoid(bx, by, conf) || getEntitiesAt(bx, by).some(e => ['rock', 'mob', 'lock', 'girl'].includes(e.type));
+            if (!obstacle) {
+                blocker.x = bx; blocker.y = by; 
+                spawnImpact(tx, ty); 
+                turnPassed = true;
+                playerMoves = false;
+            } else {
+                blocker.dead = true; 
+                spawnExplosion(tx, ty); 
+                screenShake(8); 
+                turnPassed = true;
+                playerMoves = false;
+            }
+        }
+    }
+
+    if (turnPassed) {
+        if (playerMoves) {
+            game.player.x = tx; 
+            game.player.y = ty;
+            let itemsOnTile = getEntitiesAt(tx, ty);
+            let keyOnTile = itemsOnTile.find(e => e.type === 'key');
+            if (keyOnTile) {
+                keyOnTile.dead = true;
+                game.hasKey = true;
+                spawnSparkles(tx, ty, PALETTE.key);
+            }
+        }
+
+        let finalX = game.player.x;
+        let finalY = game.player.y;
+        
+        if (isSpike(finalX, finalY)) cost = 2;
+        let tSpike = game.toggleSpikes.find(s => s.x === finalX && s.y === finalY);
+        if (tSpike && ((tSpike.startActive && nextToggleState === 0) || (!tSpike.startActive && nextToggleState === 1))) cost = 2;
+
+        game.moves -= cost;
+        game.toggleState = nextToggleState; 
+
+        if (game.toggleState === 1) { 
+             game.toggleSpikes.forEach(s => {
+                 if (!s.startActive) {
+                     let mobs = getEntitiesAt(s.x, s.y).filter(e => e.type === 'mob');
+                     mobs.forEach(mob => { mob.dead = true; spawnExplosion(s.x, s.y); });
+                 }
+             });
+        } else { 
+             game.toggleSpikes.forEach(s => {
+                 if (s.startActive) {
+                     let mobs = getEntitiesAt(s.x, s.y).filter(e => e.type === 'mob');
+                     mobs.forEach(mob => { mob.dead = true; spawnExplosion(s.x, s.y); });
+                 }
+             });
+        }
+
+        if (cost > 1) { 
+            spawnBlood(game.player.vx, game.player.vy);
+            screenShake(4); 
+        }
+
+        game.entities = game.entities.filter(e => !e.dead);
+        updateUI();
+        lockInput(100); 
+        
+        checkWin(); 
+        
+        if (game.state !== 'WON' && game.moves <= 0) {
+            game.state = 'LOST';
+            setTimeout(() => showModal('dialogue', "GAME OVER", "You ran out of Willpower.", "RETRY"), 300);
+        }
+    }
+}
+
+function checkWin() {
+    let girls = game.entities.filter(e => e.type === 'girl');
+    let won = girls.some(g => {
+        let dist = Math.abs(game.player.x - g.x) + Math.abs(game.player.y - g.y);
+        return dist <= 1;
+    });
+
+    if (won) {
+        game.state = 'WON';
+        const lvlData = LEVELS[game.currentLevelIdx];
+        const isLast = game.currentLevelIdx === LEVELS.length - 1;
+        const btnText = isLast ? "FINISH" : "NEXT";
+        setTimeout(() => showModal('dialogue', "SUCCESS", `"${lvlData.demonLine}"`, btnText), 200);
+        girls.forEach(g => spawnHearts(g.vx, g.vy));
+    }
+}
+
+function isVoid(x, y, conf) {
+    if (x < 0 || x >= conf.cols || y < 0 || y >= conf.rows) return true;
+    return game.grid[y][x] === 8;
+}
+function isSpike(x, y) { return game.spikes.some(s => s.x === x && s.y === y); }
+function isToggleSpike(x, y) { return game.toggleSpikes.some(s => s.x === x && s.y === y); }
+function lockInput(ms) { game.inputLocked = true; setTimeout(() => game.inputLocked = false, ms); }
+
+// --- Rendering ---
+
+function loop(timestamp) {
+    let dt = timestamp - game.lastTime; game.lastTime = timestamp;
+    updatePhysics(dt); draw();
+    window.requestAnimationFrame(loop);
+}
+
+function updatePhysics(dt) {
+    game.beat = (Date.now() / 500) % 1; 
+    
+    const conf = LEVELS[game.currentLevelIdx].config;
+    if (conf.cameraFollow) {
+        game.cameraY += (game.player.vy - game.cameraY) * 0.1;
+    }
+
+    game.entities.forEach(e => { e.vx += (e.x - e.vx) * 0.25; e.vy += (e.y - e.vy) * 0.25; });
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+        let p = game.particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.015; p.life -= 0.02;
+        if (p.life <= 0) game.particles.splice(i, 1);
+    }
+}
+
+function draw() {
+    ctx.fillStyle = PALETTE.void; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (game.grid.length === 0) return;
+
+    const conf = LEVELS[game.currentLevelIdx].config;
+    
+    const padding = 20;
+    const availW = canvas.width - padding * 2;
+    const availH = canvas.height - padding * 2;
+    
+    let TS;
+    if (conf.cameraFollow) {
+        TS = Math.floor(availW / conf.cols);
+    } else {
+        const tsX = availW / conf.cols;
+        const tsY = availH / conf.rows;
+        TS = Math.floor(Math.min(tsX, tsY)); 
+    }
+    
+    const startX = (canvas.width - TS * conf.cols) / 2;
+    let startY;
+
+    if (conf.cameraFollow) {
+        const centerY = canvas.height / 2;
+        const playerPixelY = game.cameraY * TS + TS/2;
+        startY = centerY - playerPixelY;
+        const minY = canvas.height - (conf.rows * TS) - padding;
+        const maxY = padding;
+        startY = Math.max(minY, Math.min(maxY, startY));
+    } else {
+        startY = (canvas.height - TS * conf.rows) / 2;
+    }
+
+    ctx.save();
+    ctx.translate(startX, startY);
+
+    for (let y = 0; y < conf.rows; y++) {
+        for (let x = 0; x < conf.cols; x++) {
+            if (game.grid[y][x] === 8) continue;
+            ctx.fillStyle = ((x+y)%2 === 0) ? PALETTE.floor1 : PALETTE.floor2;
+            ctx.fillRect(x*TS, y*TS, TS, TS);
+            
+            if (isSpike(x, y)) drawSpike(ctx, x*TS, y*TS, TS, true);
+            
+            let tSpike = game.toggleSpikes.find(s => s.x === x && s.y === y);
+            if (tSpike) {
+                let active = isToggleSpikeActive(tSpike);
+                drawSpike(ctx, x*TS, y*TS, TS, active, true);
+            }
+
+            if (y === conf.rows - 1 || game.grid[y+1][x] === 8) {
+                ctx.fillStyle = PALETTE.wallSide; ctx.fillRect(x*TS, y*TS + TS, TS, TS*0.2);
+            }
+        }
+    }
+
+    game.entities.sort((a, b) => {
+        if (a.vy !== b.vy) return a.vy - b.vy;
+        let zA = (a.type === 'key') ? 0 : (a.type === 'hero' ? 2 : 1);
+        let zB = (b.type === 'key') ? 0 : (b.type === 'hero' ? 2 : 1);
+        return zA - zB;
+    });
+
+    game.entities.forEach(e => {
+        const CX = e.vx * TS + TS/2; const CY = e.vy * TS + TS/2;
+        const bop = Math.sin(game.beat * Math.PI * 2) * (TS * 0.03);
+        ctx.save(); ctx.translate(CX, CY);
+        
+        if (e.type !== 'key') {
+            ctx.fillStyle = PALETTE.shadow; ctx.beginPath(); ctx.ellipse(0, TS*0.35, TS*0.3, TS*0.1, 0, 0, Math.PI*2); ctx.fill();
+        }
+        
+        if (e.type === 'hero') drawHero(ctx, TS, bop, e.dir);
+        else if (e.type === 'girl') drawGirl(ctx, TS, bop, e.vx, e.vy); 
+        else if (e.type === 'rock') drawRock(ctx, TS, game.currentLevelIdx + 1);
+        else if (e.type === 'mob') drawMob(ctx, TS, bop);
+        else if (e.type === 'key') drawKey(ctx, TS, bop);
+        else if (e.type === 'lock') drawLock(ctx, TS);
+        
+        ctx.restore();
+    });
+
+    game.particles.forEach(p => {
+        ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+        const size = p.size * TS * 0.1; ctx.fillRect(p.x * TS, p.y * TS, size, size);
+        ctx.globalAlpha = 1.0;
+    });
+
+    ctx.restore();
+}
+
+function drawKey(ctx, s, bop) {
+    ctx.translate(0, bop); ctx.fillStyle = PALETTE.key;
+    ctx.beginPath(); ctx.arc(0, -s*0.1, s*0.15, 0, Math.PI*2); ctx.fill(); 
+    ctx.fillRect(-s*0.05, 0, s*0.1, s*0.3); ctx.fillRect(0, s*0.15, s*0.15, s*0.08); 
+}
+function drawLock(ctx, s) {
+    ctx.fillStyle = PALETTE.lock; ctx.fillRect(-s*0.35, -s*0.2, s*0.7, s*0.6); 
+    ctx.strokeStyle = PALETTE.lock; ctx.lineWidth = s*0.08;
+    ctx.beginPath(); ctx.arc(0, -s*0.2, s*0.15, Math.PI, 0); ctx.stroke(); 
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0, s*0.1, s*0.08, 0, Math.PI*2); ctx.fill(); 
+}
+function drawSpike(ctx, x, y, s, isActive, isToggle) {
+    if (isActive) {
+        ctx.fillStyle = isToggle ? PALETTE.spikeActive : PALETTE.spike; 
+        const h = isToggle ? s * 0.6 : s * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(x+s*0.2, y+s*0.8); ctx.lineTo(x+s*0.3, y+s*0.8-h); ctx.lineTo(x+s*0.4, y+s*0.8);
+        ctx.moveTo(x+s*0.45, y+s*0.8); ctx.lineTo(x+s*0.55, y+s*0.8-h); ctx.lineTo(x+s*0.65, y+s*0.8);
+        ctx.moveTo(x+s*0.7, y+s*0.8); ctx.lineTo(x+s*0.8, y+s*0.8-h); ctx.lineTo(x+s*0.9, y+s*0.8); 
+        ctx.fill();
+    } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath(); ctx.moveTo(x+s*0.1, y+s*0.9); ctx.lineTo(x+s*0.3, y+s*0.7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x+s*0.9, y+s*0.9); ctx.lineTo(x+s*0.7, y+s*0.7); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x+s*0.5, y+s*0.5, s*0.1, 0, Math.PI*2); ctx.fill();
+    }
+}
+function drawHero(ctx, s, bop, dir) {
+    const w = s*0.4; const h = s*0.6; ctx.translate(0, bop);
+    ctx.fillStyle = PALETTE.heroSuit; ctx.fillRect(-w/2, -h/2, w, h);
+    ctx.fillStyle = PALETTE.heroShirt; ctx.fillRect(-w/4, -h/2, w/2, h); 
+    ctx.fillStyle = PALETTE.demonRed; ctx.fillRect(-w/8, -h/4, w/4, h/3); 
+    ctx.fillStyle = PALETTE.heroSkin; ctx.fillRect(-w/2 + 2, -h - 5, w - 4, w);
+    ctx.fillStyle = '#000'; ctx.fillRect(-w/2, -h + 2, w, s*0.08);
+}
+function drawGirl(ctx, s, bop, vx, vy) {
+    const w = s*0.4; const h = s*0.55; ctx.translate(0, bop);
+    ctx.fillStyle = PALETTE.demonRed; ctx.fillRect(-w/2, -h/2, w, h);
+    ctx.fillStyle = PALETTE.demonSkin; ctx.fillRect(-w/2 + 2, -h - 5, w - 4, w);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, -h, s*0.25, 0, Math.PI, true); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.beginPath();
+    ctx.moveTo(-10, -h-10); ctx.lineTo(-15, -h-25); ctx.lineTo(-5, -h-10);
+    ctx.moveTo(10, -h-10); ctx.lineTo(15, -h-25); ctx.lineTo(5, -h-10); ctx.fill();
+    if (Math.random() < 0.05) spawnParticle(vx, vy, PALETTE.demonRed, 'heart'); 
+}
+function drawMob(ctx, s, bop) {
+    ctx.translate(0, bop); ctx.fillStyle = PALETTE.bone; ctx.beginPath(); ctx.arc(0, -s*0.2, s*0.18, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.fillRect(-5, -s*0.25, 4, 4); ctx.fillRect(3, -s*0.25, 4, 4);
+    ctx.fillStyle = PALETTE.bone; ctx.fillRect(-s*0.15, 0, s*0.3, s*0.3);
+    ctx.fillStyle = '#000'; ctx.fillRect(-s*0.1, s*0.1, s*0.2, s*0.05);
+}
+function drawRock(ctx, s, num) {
+    ctx.fillStyle = PALETTE.rock; ctx.fillRect(-s*0.35, -s*0.35, s*0.7, s*0.7);
+    const roman = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"][num-1] || "X";
+    ctx.fillStyle = '#ccc'; ctx.font = 'bold 20px serif'; ctx.textAlign = 'center'; ctx.fillText(roman, 0, 5);
+}
+
+// --- Particles & UI ---
+function spawnParticle(x, y, color, type='square') { game.particles.push({x:x+0.5,y:y+0.5,vx:(Math.random()-0.5)*0.1,vy:(Math.random()-1)*0.1,color:color,life:1.0,size:Math.random()*2+1,type:type}); }
+function spawnExplosion(x, y) { for(let i=0; i<15; i++) spawnParticle(x, y, PALETTE.bone); }
+function spawnImpact(x, y) { for(let i=0; i<8; i++) spawnParticle(x, y, '#fff'); }
+function spawnDust(x, y) { for(let i=0; i<5; i++) spawnParticle(x, y, '#888'); }
+function spawnHearts(x, y) { for(let i=0; i<5; i++) spawnParticle(x, y, PALETTE.demonRed, 'heart'); }
+function spawnBlood(x, y) { for(let i=0; i<8; i++) spawnParticle(x, y, '#ff0000'); }
+function spawnSparkles(x, y, color) { for(let i=0; i<10; i++) spawnParticle(x, y, color); }
+
+function updateUI() {
+    uiMoves.innerText = game.moves;
+    if (game.moves <= 5) uiMoves.style.color = 'red'; else uiMoves.style.color = PALETTE.demonRed;
+    if (game.hasKey) elKeyInd.classList.add('visible'); else elKeyInd.classList.remove('visible');
+}
+
+function showModal(type, title, text, btnText) {
+    let m = document.getElementById(`modal-${type}`);
+    if (type === 'levels') {
+        const list = document.getElementById('level-list'); list.innerHTML = '';
+        LEVELS.forEach((l, i) => {
+            const btn = document.createElement('button'); btn.className = 'btn btn-modal btn-level-select'; btn.innerText = (i + 1);
+            if (i === game.currentLevelIdx) btn.style.borderColor = PALETTE.demonRed;
+            btn.onclick = () => { loadLevel(i); hideModals(); }; list.appendChild(btn);
+        });
+    } else if (type === 'dialogue') {
+        document.getElementById('dia-title').innerText = title; document.getElementById('dia-text').innerText = text;
+        const btn = document.getElementById('btn-next'); btn.innerText = btnText;
+        btn.onclick = () => { if (title === 'GAME OVER') resetGame(); else if (game.currentLevelIdx < LEVELS.length - 1) loadLevel(game.currentLevelIdx + 1); else loadLevel(0); };
+    }
+    m.style.display = 'flex'; setTimeout(() => m.classList.add('show'), 10);
+}
+function hideModals() { document.querySelectorAll('.modal-overlay').forEach(el => { el.classList.remove('show'); setTimeout(() => el.style.display = 'none', 300); }); }
+function screenShake() { elContainer.classList.remove('shake'); void elContainer.offsetWidth; elContainer.classList.add('shake'); }
+
+window.addEventListener('resize', () => { resize(); });
+
+document.getElementById('btn-restart-ui').onclick = () => showModal('restart');
+document.getElementById('btn-levels-ui').onclick = () => showModal('levels');
+document.getElementById('btn-cancel').onclick = hideModals;
+document.getElementById('btn-cancel-levels').onclick = hideModals;
+document.getElementById('btn-confirm').onclick = resetGame;
+
+let tsx=0, tsy=0;
+canvas.addEventListener('touchstart', e=>{ tsx=e.touches[0].clientX; tsy=e.touches[0].clientY; e.preventDefault(); }, {passive:false});
+canvas.addEventListener('touchend', e=>{
+    let dx=e.changedTouches[0].clientX-tsx; let dy=e.changedTouches[0].clientY-tsy;
+    if(Math.abs(dx)>Math.abs(dy)) handleInput(dx>0?1:-1, 0); else handleInput(0, dy>0?1:-1);
+});
+
+window.addEventListener('keydown', e => {
+    if (e.repeat) return; const k = e.key.toLowerCase();
+    const modals = document.querySelectorAll('.modal-overlay');
+    let modalOpen = false; modals.forEach(m => { if(m.style.display === 'flex') modalOpen = true; });
+
+    if (modalOpen) {
+        if (k === 'enter') { 
+            if (document.getElementById('modal-restart').style.display === 'flex') resetGame(); 
+            else if (document.getElementById('modal-dialogue').style.display === 'flex') document.getElementById('btn-next').click();
+        }
+        if (k === 'escape') hideModals(); return;
+    }
+    if (k === 'r') showModal('restart');
+    if (k === 'w' || k === 'arrowup') handleInput(0, -1);
+    else if (k === 's' || k === 'arrowdown') handleInput(0, 1);
+    else if (k === 'a' || k === 'arrowleft') handleInput(-1, 0);
+    else if (k === 'd' || k === 'arrowright') handleInput(1, 0);
+});
+
+init();
+</script>
+</body>
+</html>
