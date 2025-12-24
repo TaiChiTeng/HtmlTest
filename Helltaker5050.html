@@ -1,0 +1,1937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Helltaker - Sin Machine (No BGM) - 优化版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --ui-red: #ff0044;
+            --ui-white: #e0e0e0;
+            --ui-gold: #ffd700;
+            --chain-blue: #00ccff;
+            --chain-pulse: #00ffff;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--ui-white);
+            font-family: 'Crimson Text', serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 650px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        #top-bar {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            height: 30px;
+        }
+
+        .btn {
+            background: transparent;
+            color: #888;
+            border: 2px solid #444;
+            padding: 4px 10px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 12px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn:active { transform: scale(0.95); background: rgba(255,255,255,0.1); }
+        .btn-restart { border-color: var(--ui-red); color: var(--ui-red); }
+        .btn-levels { border-color: #fff; color: #fff; }
+
+        #indicators-wrapper { display: flex; align-items: center; gap: 10px; }
+        #info-indicator, #key-indicator {
+            color: var(--ui-gold); font-size: 18px; display: none; align-items: center; gap: 5px;
+            text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); font-weight: bold;
+        }
+        #info-indicator.visible, #key-indicator.visible { display: flex; }
+        
+        #audio-toggle {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            width: 36px;
+            height: 36px;
+            border: 2px solid #666;
+            border-radius: 50%;
+            background: transparent;
+            color: #666;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+        #audio-toggle:hover { border-color: var(--ui-white); color: var(--ui-white); }
+        #audio-toggle.muted { border-color: var(--ui-red); color: var(--ui-red); }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            max-height: 600px;
+            border: 4px solid #2a2a2a;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            background: #1a1a1a;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas { display: block; image-rendering: pixelated; }
+
+        #ui-bar {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            position: relative;
+            width: 100%;
+        }
+
+        .stat-box { font-size: 28px; letter-spacing: 2px; text-shadow: 2px 2px 0 #000; }
+        .highlight { color: var(--ui-red); font-size: 36px; }
+        .controls-hint { font-size: 14px; color: #666; opacity: 0.7; }
+
+        #boss-hp-container {
+            position: absolute; top: 10px; left: 10%; width: 80%; height: 10px; 
+            background: #333; border: 2px solid #fff; display: none; z-index: 50;
+        }
+        #boss-hp-fill { height: 100%; background: var(--ui-red); width: 100%; transition: width 0.2s; }
+
+        .modal-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 999; opacity: 0; transition: opacity 0.2s ease; padding: 20px;
+        }
+        .modal-overlay.show { opacity: 1; }
+
+        .modal-box {
+            background: #fff; color: #000; padding: 25px; border: 4px solid #000;
+            text-align: center; width: auto; min-width: 200px; max-width: 90%;
+            box-shadow: 0 0 30px rgba(255, 0, 68, 0.4);
+            transform: scale(0.9); transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.show .modal-box { transform: scale(1); }
+
+        .modal-title { font-size: 24px; color: var(--ui-red); display: block; margin-bottom: 15px; text-transform: uppercase; line-height: 1.2; }
+        .modal-buttons { display: flex; justify-content: center; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+        .btn-modal { border: 2px solid #000; background: #fff; color: #000; padding: 8px 16px; font-size: 16px; cursor: pointer; font-weight: bold; min-width: 60px; }
+        .btn-primary { background: #000; color: #fff; }
+
+        #level-list {
+            display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 12px; padding: 5px;
+            margin: 0 auto; max-width: 280px; justify-content: flex-start;
+            scrollbar-width: thin; scrollbar-color: var(--ui-red) #eee; -webkit-overflow-scrolling: touch;
+        }
+        .btn-level-select { flex: 0 0 auto; width: 50px; height: 50px; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+        
+        .damage-indicator {
+            position: absolute;
+            color: var(--ui-red);
+            font-weight: bold;
+            font-size: 24px;
+            text-shadow: 0 0 5px #000;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            animation: damagePop 0.8s forwards;
+        }
+        
+        @keyframes damagePop {
+            0% { opacity: 0; transform: translateY(0) scale(0.5); }
+            50% { opacity: 1; transform: translateY(-30px) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-60px) scale(0.8); }
+        }
+        
+        /* 新增：滚动指示器样式 */
+        .scroll-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 0, 68, 0.2);
+            z-index: 10;
+            overflow: hidden;
+        }
+        
+        .scroll-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--ui-red), #ff3366);
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <div id="top-bar">
+        <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-levels" id="btn-levels-ui">LEVELS</button>
+            <div id="indicators-wrapper">
+                <div id="key-indicator">🔑 KEY</div>
+                <div id="info-indicator"></div>
+            </div>
+        </div>
+        <span style="color:#666; letter-spacing:1px; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 80px;" id="level-indicator">LVL I</span>
+        <button class="btn btn-restart" id="btn-restart-ui">R</button>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="boss-hp-container"><div id="boss-hp-fill"></div></div>
+        
+        <!-- 新增：滚动指示器 -->
+        <div id="scroll-indicator" class="scroll-indicator" style="display: none;">
+            <div id="scroll-progress" class="scroll-progress"></div>
+        </div>
+        
+        <div id="modal-restart" class="modal-overlay"><div class="modal-box"><span class="modal-title">RESTART?</span><div class="modal-buttons"><button class="btn btn-modal btn-primary" id="btn-confirm">YES</button><button class="btn btn-modal" id="btn-cancel">NO</button></div></div></div>
+        <div id="modal-levels" class="modal-overlay"><div class="modal-box"><span class="modal-title">SELECT LEVEL</span><div id="level-list"></div><div class="modal-buttons"><button class="btn btn-modal" id="btn-cancel-levels">CLOSE</button></div></div></div>
+        <div id="modal-dialogue" class="modal-overlay"><div class="modal-box"><span class="modal-title" id="dia-title"></span><div id="dia-text" style="font-style:italic;margin-bottom:15px;font-size:14px;"></div><button class="btn btn-modal btn-primary" id="btn-next">NEXT</button></div></div>
+    </div>
+
+    <div id="ui-bar">
+        <div class="stat-box" id="stat-container">WILL: <span id="moves-val" class="highlight">23</span></div>
+        <div class="controls-hint">Swipe or Tap Arrows (Keyboard)</div>
+        <button id="audio-toggle" title="Toggle Audio">♪</button>
+    </div>
+</div>
+
+<script>
+/**
+ * Helltaker Perfected - No BGM Ver.
+ * 改进内容：
+ * 1. 彻底屏蔽了所有背景音乐 (Level, Boss, Victory, Defeat)
+ * 2. 保留所有音效 (SFX)
+ * 3. 优化了第十关链球目标表现
+ * 4. 优化了第十关地图上下滚动地刺表现
+ */
+
+// --- 数据 ---
+const LEVELS = [
+    {type:'PUZZLE',title:"LEVEL I",demonName:"Pandemonica",demonLine:"Coffee? I hope you brought some.",map:["888888888","888880088","880000088","880000888","800888888","800000088","800000008","888888888"],config:{cols:9,rows:8,maxMoves:23,heroStart:{r:6,c:6},girls:[{r:1,c:7}],rocks:[{r:1,c:2},{r:1,c:4},{r:2,c:2},{r:2,c:5}],mobs:[{r:4,c:3},{r:4,c:5},{r:5,c:4}],spikes:[],toggleSpikes:[],keys:[],locks:[]}},
+    {type:'PUZZLE',title:"LEVEL II",demonName:"Modeus",demonLine:"You seem lost.",map:["888888888","880000888","880800008","800880008","800880008","800880008","888880008","888888888"],config:{cols:9,rows:8,maxMoves:24,heroStart:{r:2,c:1},girls:[{r:1,c:5}],rocks:[{r:4,c:5},{r:4,c:6},{r:4,c:7}],mobs:[{r:1,c:7},{r:2,c:6},{r:5,c:2}],spikes:[{r:3,c:6},{r:4,c:5},{r:4,c:6},{r:5,c:4},{r:5,c:5},{r:4,c:2}],toggleSpikes:[],keys:[],locks:[]}},
+    {type:'PUZZLE',title:"LEVEL III",demonName:"Cerberus",demonLine:"Please take us with you!",map:["8888888888","8888000088","8888888088","8880000008","8880808008","8880000088","8080808088","8000000088","8888888888"],config:{cols:10,rows:9,maxMoves:32,heroStart:{r:5,c:8},girls:[{r:7,c:4},{r:7,c:5},{r:7,c:6}],rocks:[],mobs:[{r:1,c:6},{r:3,c:5}],spikes:[{r:2,c:3},{r:2,c:5},{r:3,c:6},{r:3,c:7},{r:4,c:3},{r:4,c:5},{r:5,c:4},{r:5,c:5}],toggleSpikes:[],keys:[{r:2,c:1}],locks:[{r:6,c:7}]}},
+    {type:'PUZZLE',title:"LEVEL IV",demonName:"Malina",demonLine:"Turn-based strategy?",map:["8888888888","8080008888","8000000088","8000000008","8000000008","8800000888","8888888888"],config:{cols:10,rows:7,maxMoves:23,heroStart:{r:5,c:1},girls:[{r:3,c:8}],keys:[{r:5,c:3}],locks:[{r:4,c:6}],spikes:[{r:4,c:3},{r:4,c:4}],toggleSpikes:[],mobs:[],rocks:[{r:1,c:3},{r:1,c:5},{r:2,c:2},{r:2,c:4},{r:2,c:7},{r:3,c:1},{r:3,c:3},{r:3,c:5},{r:3,c:6},{r:4,c:2},{r:4,c:4},{r:5,c:5}]}},
+    {type:'PUZZLE',title:"LEVEL V",demonName:"Zdrada",demonLine:"Took you long enough.",map:["88888888","88880088","88800008","80800008","80800008","80800008","80000008","88888808","88888888"],config:{cols:8,rows:9,maxMoves:23,heroStart:{r:5,c:1},girls:[{r:7,c:5}],keys:[{r:1,c:6}],locks:[{r:6,c:4}],mobs:[{r:3,c:1}],rocks:[{r:3,c:3},{r:3,c:4},{r:3,c:5},{r:3,c:6},{r:5,c:5},{r:6,c:5}],spikes:[],toggleSpikes:[{r:2,c:1},{r:2,c:3},{r:2,c:6},{r:4,c:4},{r:4,c:6},{r:5,c:3}]}},
+    {type:'PUZZLE',title:"LEVEL VI",demonName:"Azazel",demonLine:"Fascinating!",map:["888888888","880008888","880008888","800008888","880000888","880800008","880000088","888880008","888880088","888888888"],config:{cols:9,rows:10,maxMoves:43,heroStart:{r:8,c:3},girls:[{r:1,c:6}],keys:[{r:6,c:4}],locks:[{r:2,c:5}],mobs:[{r:3,c:6},{r:4,c:2}],rocks:[{r:2,c:6},{r:3,c:4},{r:4,c:4},{r:4,c:5},{r:5,c:3},{r:7,c:2},{r:7,c:3},{r:7,c:4}],spikes:[],toggleSpikes:[{r:5,c:2},{r:5,c:3}]}},
+    {type:'PUZZLE',title:"LEVEL VII",demonName:"Justice",demonLine:"Let's skip the puzzle.",map:["88888888","88880088","88880008","80080008","80000008","80800008","80880888","80000888","88888888"],config:{cols:8,rows:9,maxMoves:32,heroStart:{r:3,c:6},girls:[{r:7,c:4}],keys:[{r:5,c:2}],locks:[{r:6,c:5}],mobs:[{r:3,c:3},{r:4,c:1},{r:4,c:4}],rocks:[{r:4,c:2},{r:4,c:5},{r:5,c:4},{r:5,c:5},{r:5,c:6}],spikes:[],toggleSpikes:[{r:1,c:1,startActive:false},{r:1,c:3,startActive:false},{r:2,c:4,startActive:false},{r:1,c:2,startActive:true},{r:1,c:4,startActive:true},{r:2,c:1,startActive:true}]}},
+    {type:'PUZZLE',title:"LEVEL VIII",demonName:"Lucifer",demonLine:"You think you can walk in?",map:["88888888888","88888088888","88000000088","88080008088","88000000088","88080008088","88000000088","88080008088","88000000088","88080008088","88000000088","88080008088","88000000088","88880008888","88888888888"],config:{cols:11,rows:15,maxMoves:12,cameraFollow:true,heroStart:{r:3,c:5},girls:[{r:13,c:5}],rocks:[],keys:[],locks:[],spikes:[],toggleSpikes:[],mobs:[{r:5,c:5},{r:6,c:5},{r:7,c:5},{r:8,c:5},{r:9,c:5},{r:10,c:5},{r:11,c:5},{r:12,c:5}]}},
+    {type:'PUZZLE',title:"LEVEL IX",demonName:"Door",demonLine:"......",map:["88888888888","88888088888","88880008888","88880008888","88080008088","80000000008","80000000008","88000000088","88888888888"],config:{cols:11,rows:9,maxMoves:33,heroStart:{r:1,c:2},girls:[{r:7,c:5}],rocks:[{r:1,c:4},{r:1,c:7},{r:2,c:2},{r:2,c:3},{r:2,c:4},{r:2,c:7},{r:2,c:8},{r:3,c:1},{r:3,c:4},{r:3,c:5},{r:3,c:6},{r:4,c:2},{r:4,c:4},{r:5,c:4},{r:5,c:6}],keys:[{r:3,c:9}],locks:[{r:5,c:5}],spikes:[],toggleSpikes:[],mobs:[]}},
+    {
+        type: 'BOSS',
+        title: "LEVEL X", demonName: "Judgement", demonLine: "IGNITE THE SIN MACHINE!",
+        config: {
+            cols: 7, rows: 7, heroStart: {r:3,c:3}, maxHP: 5, bossHP: 2, chainMaxHP: 5,
+            scrollDelay: 3.0, scrollTime: 1.5, phaseTime: 28.0,
+            chains: [
+                {t:6,v:[0]},{t:7,v:[1]},{t:8,v:[2]},{t:9,v:[3]},{t:10,v:[4]},
+                {t:12,v:[6]},{t:12.5,v:[5]},{t:13,v:[4]},{t:13.5,v:[3]},{t:14,v:[2]},
+                {t:15,v:[0]},{t:16,v:[2]},{t:17,v:[4]},
+                {t:18,v:[1,6]},{t:19,v:[0,3]},{t:19.5,v:[2,5]},{t:20,v:[4]},{t:21,v:[6]},
+                {t:23,v:[3]},{t:24,v:[0,6]},{t:25,v:[2,4]},{t:26,v:[1,5]},{t:27,v:[0,3,6]}
+            ]
+        }
+    }
+];
+
+const PALETTE = {
+    bg:'#1a1a1a',void:'#0f0f0f',floor1:'#2e2929',floor2:'#262222',wallSide:'#3d3030',
+    heroSuit:'#fff',heroShirt:'#222',heroSkin:'#ffe0bd',demonSkin:'#d6a6a6',demonRed:'#ff0044',
+    bone:'#e0e0e0',rock:'#e3e3e3',spike:'#555',spikeActive:'#a00',key:'#ffd700',lock:'#888',
+    chain:'#fff',chainWarn:'rgba(255,255,255,0.3)',shadow:'rgba(0,0,0,0.4)',
+    chainTarget:'#00ccff',chainTargetGlow:'#00ffff',chainTargetDamage:'#ff3300',
+    scrollIndicator: 'rgba(255, 0, 68, 0.6)'
+};
+
+// ============================================
+// 音频管理器 - 程序化音频生成
+// ============================================
+class AudioManager {
+    constructor() {
+        this.audioContext = null;
+        this.masterGain = null;
+        this.musicGain = null;
+        this.sfxGain = null;
+        this.isEnabled = true;
+        this.currentMusic = null;
+        this.currentMelody = null;
+        this.currentBass = null;
+        this.currentDrum = null;
+        this.currentHeartbeat = null;
+        this.musicTime = 0;
+        this.lastBeat = 0;
+        this.bossHeartbeatRate = 1.0;
+        this.activeSFX = new Set();
+        this.maxSFX = 8; // 同时最大音效数
+    }
+    
+    init() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // 创建混音通道
+            this.masterGain = this.audioContext.createGain();
+            this.musicGain = this.audioContext.createGain();
+            this.sfxGain = this.audioContext.createGain();
+            
+            // 连接节点
+            this.musicGain.connect(this.masterGain);
+            this.sfxGain.connect(this.masterGain);
+            this.masterGain.connect(this.audioContext.destination);
+            
+            // 设置初始音量
+            this.musicGain.gain.value = 0;    // 0% 背景音乐 (已屏蔽)
+            this.sfxGain.gain.value = 0.6;    // 60% 音效
+            this.masterGain.gain.value = 1.0; // 100% 总音量
+            
+            console.log("AudioManager initialized (BGM Disabled)");
+            return true;
+        } catch (error) {
+            console.error("Failed to initialize audio:", error);
+            this.isEnabled = false;
+            return false;
+        }
+    }
+    
+    toggle() {
+        if (!this.audioContext) return;
+        
+        this.isEnabled = !this.isEnabled;
+        const audioToggle = document.getElementById('audio-toggle');
+        audioToggle.classList.toggle('muted', !this.isEnabled);
+        // 更新按钮图标
+        audioToggle.innerHTML = this.isEnabled ? '♪' : '🔇';
+        
+        if (this.isEnabled && this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        
+        this.masterGain.gain.value = this.isEnabled ? 1.0 : 0.001;
+    }
+    
+    // 基础波形生成
+    generateWave(type, frequency, duration, volume = 0.5, destination = null) {
+        if (!this.isEnabled || !this.audioContext) return null;
+        
+        // 限制同时播放的音效数量
+        if (this.activeSFX.size >= this.maxSFX) {
+            // 移除最早的音效
+            const first = this.activeSFX.values().next().value;
+            if (first) first.stop();
+        }
+        
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        
+        oscillator.type = type;
+        oscillator.frequency.value = frequency;
+        
+        gainNode.gain.setValueAtTime(volume * 0.7, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, 
+            this.audioContext.currentTime + duration);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(destination || this.sfxGain);
+        
+        oscillator.start();
+        oscillator.stop(this.audioContext.currentTime + duration);
+        
+        // 跟踪活动音效
+        oscillator.onended = () => this.activeSFX.delete(oscillator);
+        this.activeSFX.add(oscillator);
+        
+        return oscillator;
+    }
+    
+    // 生成噪声
+    generateNoise(duration, volume = 0.3, destination = null) {
+        if (!this.isEnabled || !this.audioContext) return null;
+        
+        const bufferSize = this.audioContext.sampleRate * duration;
+        const buffer = this.audioContext.createBuffer(1, bufferSize, 
+            this.audioContext.sampleRate);
+        const output = buffer.getChannelData(0);
+        
+        for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+        }
+        
+        const source = this.audioContext.createBufferSource();
+        const gainNode = this.audioContext.createGain();
+        
+        source.buffer = buffer;
+        gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, 
+            this.audioContext.currentTime + duration);
+        
+        source.connect(gainNode);
+        gainNode.connect(destination || this.sfxGain);
+        
+        source.start();
+        
+        source.onended = () => this.activeSFX.delete(source);
+        this.activeSFX.add(source);
+        
+        return source;
+    }
+    
+    // 生成带包络的音效
+    generateEnvelope(frequency, attack = 0.01, decay = 0.1, sustain = 0.3, release = 0.1, type = 'square') {
+        if (!this.isEnabled || !this.audioContext) return null;
+        
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        const now = this.audioContext.currentTime;
+        const totalDuration = attack + decay + release;
+        
+        oscillator.type = type;
+        oscillator.frequency.value = frequency;
+        
+        // ADSR包络
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(0.7, now + attack); // 起音
+        gainNode.gain.exponentialRampToValueAtTime(sustain * 0.7, now + attack + decay); // 衰减
+        gainNode.gain.setValueAtTime(sustain * 0.7, now + attack + decay); // 保持
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + totalDuration); // 释音
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.sfxGain);
+        
+        oscillator.start();
+        oscillator.stop(now + totalDuration);
+        
+        oscillator.onended = () => this.activeSFX.delete(oscillator);
+        this.activeSFX.add(oscillator);
+        
+        return oscillator;
+    }
+    
+    // =============== 音效函数 ===============
+    playStepSound() {
+        this.generateWave('square', 250 + Math.random() * 100, 0.08, 0.4);
+    }
+    
+    playPushSound() {
+        this.generateWave('square', 100 + Math.random() * 40, 0.15, 0.5);
+        this.generateNoise(0.1, 0.2);
+    }
+    
+    playSpikeSound() {
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(400, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.3);
+        
+        gain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
+        
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 0.3);
+    }
+    
+    playToggleSound() {
+        this.generateWave('square', 300, 0.07, 0.4);
+        setTimeout(() => {
+            this.generateWave('square', 600, 0.07, 0.4);
+        }, 70);
+    }
+    
+    playKeyPickupSound() {
+        // 上升音阶
+        this.generateWave('square', 600, 0.06, 0.5);
+        setTimeout(() => {
+            this.generateWave('square', 800, 0.06, 0.5);
+        }, 60);
+        setTimeout(() => {
+            this.generateWave('square', 1000, 0.08, 0.5);
+        }, 120);
+    }
+    
+    playUnlockSound() {
+        this.generateWave('square', 800, 0.1, 0.4);
+        this.generateNoise(0.15, 0.2);
+        setTimeout(() => {
+            this.generateWave('square', 400, 0.2, 0.4);
+        }, 100);
+    }
+    
+    playGirlSound() {
+        // 短旋律
+        const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+        notes.forEach((freq, i) => {
+            setTimeout(() => {
+                this.generateWave('square', freq, 0.15, 0.3);
+            }, i * 150);
+        });
+    }
+    
+    playMobKillSound() {
+        this.generateNoise(0.2, 0.5);
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(300, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 0.3);
+        
+        gain.gain.setValueAtTime(0.6, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
+        
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 0.3);
+    }
+    
+    playDamageSound() {
+        // 失真效果
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        const distortion = this.audioContext.createWaveShaper();
+        
+        // 创建失真曲线
+        const distortionCurve = new Float32Array(44100);
+        for (let i = 0; i < 44100; i++) {
+            const x = i * 2 / 44100 - 1;
+            distortionCurve[i] = (Math.PI + 4) * x / (Math.PI + 4 * Math.abs(x));
+        }
+        distortion.curve = distortionCurve;
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 0.3);
+        
+        gain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
+        
+        osc.connect(distortion);
+        distortion.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 0.3);
+    }
+    
+    playHeartSound() {
+        const notes = [261.63, 329.63, 392.00]; // C4, E4, G4
+        notes.forEach((freq, i) => {
+            setTimeout(() => {
+                this.generateWave('triangle', freq, 0.15, 0.4);
+            }, i * 130);
+        });
+    }
+    
+    playButtonHoverSound() {
+        this.generateWave('square', 800, 0.05, 0.3);
+    }
+    
+    playButtonClickSound() {
+        this.generateWave('square', 600, 0.1, 0.4);
+    }
+    
+    playMenuOpenSound() {
+        const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+        notes.forEach((freq, i) => {
+            setTimeout(() => {
+                this.generateWave('square', freq, 0.1, 0.3);
+            }, i * 80);
+        });
+    }
+    
+    playMenuCloseSound() {
+        const notes = [783.99, 659.25, 523.25]; // G5, E5, C5
+        notes.forEach((freq, i) => {
+            setTimeout(() => {
+                this.generateWave('square', freq, 0.1, 0.3);
+            }, i * 80);
+        });
+    }
+    
+    playLevelSelectSound(level) {
+        const baseFreq = 300 + (level % 8) * 50;
+        this.generateWave('square', baseFreq, 0.1, 0.4);
+    }
+    
+    // =============== BOSS音效 ===============
+    playChainWarningSound() {
+        // 脉冲效果
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                this.generateWave('square', 200, 0.1, 0.3);
+            }, i * 300);
+        }
+    }
+    
+    playChainAttackSound() {
+        this.generateWave('triangle', 80, 0.3, 0.6);
+        setTimeout(() => {
+            this.generateNoise(0.2, 0.3);
+        }, 100);
+    }
+    
+    playChainBreakSound() {
+        this.generateNoise(0.3, 0.5);
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(400, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.audioContext.currentTime + 0.4);
+        
+        gain.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.4);
+        
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 0.4);
+    }
+    
+    playBossDamageSound() {
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 0.3);
+        
+        // 添加颤音效果
+        const lfo = this.audioContext.createOscillator();
+        const lfoGain = this.audioContext.createGain();
+        lfo.frequency.value = 10;
+        lfoGain.gain.value = 30;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        
+        gain.gain.setValueAtTime(0.6, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
+        
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        lfo.start();
+        osc.stop(this.audioContext.currentTime + 0.3);
+        lfo.stop(this.audioContext.currentTime + 0.3);
+    }
+    
+    playBossDefeatSound() {
+        // 长下降音
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 1.0);
+        
+        gain.gain.setValueAtTime(0.7, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 1.0);
+        
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 1.0);
+        
+        // 爆炸效果
+        setTimeout(() => {
+            this.generateNoise(0.5, 0.8);
+        }, 800);
+    }
+    
+    // 新增：链球目标音效
+    playChainTargetHitSound() {
+        // 金属撞击声
+        this.generateNoise(0.1, 0.4);
+        this.generateWave('square', 300, 0.15, 0.5);
+        setTimeout(() => {
+            this.generateWave('square', 200, 0.1, 0.3);
+        }, 100);
+    }
+    
+    playChainTargetDamageSound() {
+        // 金属破裂声
+        this.generateNoise(0.2, 0.6);
+        const osc = this.audioContext.createOscillator();
+        const gain = this.audioContext.createGain();
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, this.audioContext.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(150, this.audioContext.currentTime + 0.2);
+        
+        gain.gain.setValueAtTime(0.7, this.audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.2);
+        
+        osc.connect(gain);
+        gain.connect(this.sfxGain);
+        
+        osc.start();
+        osc.stop(this.audioContext.currentTime + 0.2);
+    }
+    
+    playChainTargetDestroySound() {
+        // 爆炸音效
+        this.generateNoise(0.4, 0.8);
+        setTimeout(() => {
+            this.generateWave('sawtooth', 150, 0.5, 0.6);
+        }, 50);
+    }
+    
+    // 新增：滚动音效
+    playScrollWarningSound() {
+        // 警告音
+        this.generateWave('sine', 300, 0.2, 0.3);
+        setTimeout(() => {
+            this.generateWave('sine', 250, 0.2, 0.3);
+        }, 200);
+    }
+    
+    playScrollStartSound() {
+        // 滚动开始音效
+        this.generateNoise(0.3, 0.4);
+        this.generateWave('sawtooth', 150, 0.5, 0.5);
+    }
+    
+    playScrollTickSound() {
+        // 滚动滴答声
+        this.generateWave('square', 100, 0.05, 0.2);
+    }
+    
+    // =============== 背景音乐系统 (已屏蔽) ===============
+    playMusic(type) {
+        return; // 直接返回，不播放任何BGM
+    }
+    
+    stopMusic() {
+        if (this.currentMelody) {
+            this.currentMelody.stop();
+            this.currentMelody = null;
+        }
+        if (this.currentBass) {
+            this.currentBass.stop();
+            this.currentBass = null;
+        }
+        if (this.currentDrum) {
+            this.currentDrum.stop();
+            this.currentDrum = null;
+        }
+        if (this.currentHeartbeat) {
+            this.currentHeartbeat.stop();
+            this.currentHeartbeat = null;
+        }
+        this.musicTime = 0;
+    }
+}
+
+// 创建全局音频管理器实例
+const audioManager = new AudioManager();
+
+// --- 全局变量 ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const elContainer = document.getElementById('game-container');
+const uiStat = document.getElementById('stat-container');
+const elInfoInd = document.getElementById('info-indicator');
+const elKeyInd = document.getElementById('key-indicator');
+const elBossHP = document.getElementById('boss-hp-container');
+const elBossHPFill = document.getElementById('boss-hp-fill');
+const scrollIndicator = document.getElementById('scroll-indicator');
+const scrollProgress = document.getElementById('scroll-progress');
+
+let game = {
+    currentLevelIdx: 0,
+    grid: [], entities: [], particles: [], 
+    spikes: [], toggleSpikes: [], toggleState: 0,
+    player: null, moves: 0, hasKey: false,
+    bossTime: 0, hp: 0, bossPhase: 0, scrollTimer: 0, activeChains: [], invuln: 0,
+    state: 'PLAYING', beat: 0, lastTime: 0, inputLocked: false, cameraY: 0,
+    // 新增：链球目标动画状态
+    chainTargetPulse: 0,
+    leftTargetHp: 0,
+    rightTargetHp: 0,
+    chainTargetsVisible: false,
+    // 新增：滚动状态
+    scrollWarningActive: false,
+    lastScrollTick: 0
+};
+
+// --- 缓动函数 ---
+function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+function easeOutElastic(t) {
+    return Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1;
+}
+
+// --- 辅助函数 ---
+function resize() {
+    const rect = elContainer.getBoundingClientRect();
+    canvas.width = rect.width; canvas.height = rect.height;
+    if (game.grid.length>0 || game.bossPhase>0) draw();
+}
+function createEntity(x,y,type) { 
+    return {x, y, vx:x, vy:y, type, dir:-1, dead:false, hp:5, 
+            // 新增：链球目标额外属性
+            pulse: 0, hitFlash: 0, shake: 0};
+}
+function getEntitiesAt(x, y) { return game.entities.filter(e => e.x === x && e.y === y && !e.dead); }
+function isVoid(x, y, conf) { if (x < 0 || x >= conf.cols || y < 0 || y >= conf.rows) return true; return game.grid[y][x] === 8; }
+function isSpike(x, y) { return game.spikes.some(s => s.x === x && s.y === y); }
+function isToggleSpike(x, y) { return game.toggleSpikes.some(s => s.x === x && s.y === y); }
+function isToggleSpikeActive(s) { if (s.startActive) return game.toggleState === 0; else return game.toggleState === 1; }
+function lockInput(ms) { game.inputLocked = true; setTimeout(() => game.inputLocked = false, ms); }
+function hideModals() { document.querySelectorAll('.modal-overlay').forEach(el=>{ el.classList.remove('show'); setTimeout(()=>el.style.display='none',200); }); }
+function screenShake(i) { elContainer.classList.remove('shake'); void elContainer.offsetWidth; elContainer.classList.add('shake'); }
+
+// 新增：显示伤害数字
+function showDamageNumber(x, y, damage) {
+    const damageEl = document.createElement('div');
+    damageEl.className = 'damage-indicator';
+    damageEl.innerText = damage.toString();
+    damageEl.style.left = x + 'px';
+    damageEl.style.top = y + 'px';
+    document.getElementById('game-container').appendChild(damageEl);
+    
+    // 移除元素
+    setTimeout(() => {
+        damageEl.remove();
+    }, 800);
+}
+
+// 新增：更新滚动指示器
+function updateScrollIndicator(progress) {
+    if (LEVELS[game.currentLevelIdx].type === 'BOSS' && game.bossPhase === 1) {
+        scrollIndicator.style.display = 'block';
+        scrollProgress.style.width = `${progress * 100}%`;
+    } else {
+        scrollIndicator.style.display = 'none';
+    }
+}
+
+function showModal(type, title, text, btnText) {
+    let m = document.getElementById(`modal-${type}`);
+    if(type==='levels') {
+        const list=document.getElementById('level-list'); list.innerHTML='';
+        LEVELS.forEach((l,i)=>{
+            if(l.type==='SKIP')return;
+            const btn=document.createElement('button'); btn.className='btn btn-modal btn-level-select';
+            btn.innerText=(i===LEVELS.length-1)?'X':(i+1);
+            if(i===game.currentLevelIdx) btn.style.borderColor=PALETTE.demonRed;
+            btn.onclick=()=>{ 
+                audioManager.playLevelSelectSound(i);
+                loadLevel(i); 
+                hideModals(); 
+            }; 
+            list.appendChild(btn);
+        });
+    } else if(type==='dialogue') {
+        document.getElementById('dia-title').innerText=title; document.getElementById('dia-text').innerText=text;
+        const btn=document.getElementById('btn-next'); btn.innerText=btnText;
+        btn.onclick=()=>{ 
+            if(title==='GAME OVER') resetGame(); 
+            else if(btnText==='MENU') { loadLevel(0); }
+            else if(game.currentLevelIdx<LEVELS.length-1) loadLevel(game.currentLevelIdx+1); 
+            else loadLevel(0);
+        };
+    }
+    m.style.display='flex'; setTimeout(()=>m.classList.add('show'),10);
+}
+
+function updateUI() {
+    if(LEVELS[game.currentLevelIdx].type==='BOSS') {
+        uiStat.innerHTML=`HP: <span class="highlight">${game.hp}</span>`;
+        elInfoInd.innerHTML = game.bossPhase===0?'PREPARE...':(game.bossPhase===1?'SURVIVE!':'DESTROY!');
+        elInfoInd.classList.add('visible');
+        
+        // 更新BOSS心跳速率
+        if (audioManager && audioManager.updateBossHeartbeatRate) {
+            audioManager.updateBossHeartbeatRate(game.hp, LEVELS[game.currentLevelIdx].config.maxHP);
+        }
+    } else {
+        uiStat.innerHTML=`WILL: <span class="highlight" style="${game.moves<=5?'color:red':''}">${game.moves}</span>`;
+        if(game.hasKey) elKeyInd.classList.add('visible'); else elKeyInd.classList.remove('visible');
+    }
+}
+
+function spawnParticle(x,y,c,t='square'){ game.particles.push({x:x+0.5,y:y+0.5,vx:(Math.random()-0.5)*0.1,vy:(Math.random()-1)*0.1,color:c,life:1.0,size:Math.random()*2+1,type:t}); }
+function spawnExplosion(x,y){ for(let i=0;i<15;i++) spawnParticle(x,y,PALETTE.bone); }
+function spawnImpact(x,y){ for(let i=0;i<8;i++) spawnParticle(x,y,'#fff'); }
+function spawnDust(x,y){ for(let i=0;i<5;i++) spawnParticle(x,y,'#888'); }
+function spawnHearts(x,y){ for(let i=0;i<5;i++) spawnParticle(x,y,PALETTE.demonRed,'heart'); }
+function spawnBlood(x,y){ for(let i=0;i<8;i++) spawnParticle(x,y,'#ff0000'); }
+function spawnSparkles(x,y,c){ for(let i=0;i<10;i++) spawnParticle(x,y,c); }
+
+// 新增：地刺粒子效果
+function spawnSpikeParticles(x, y, count = 8) {
+    for(let i=0;i<count;i++) {
+        const angle = Math.PI + Math.random() * Math.PI; // 只向上发射
+        const speed = 0.05 + Math.random() * 0.1;
+        game.particles.push({
+            x: x+0.5, y: y+0.9,
+            vx: Math.cos(angle) * speed * 0.5,
+            vy: Math.sin(angle) * speed,
+            color: PALETTE.spikeActive,
+            life: 0.8,
+            size: Math.random() * 2 + 1,
+            type: 'spark'
+        });
+    }
+}
+
+// 新增：滚动预警粒子
+function spawnScrollWarningParticles() {
+    for(let c=0; c<7; c++) {
+        for(let i=0;i<3;i++) {
+            game.particles.push({
+                x: c+0.5, y: 6.8,
+                vx: (Math.random()-0.5)*0.05,
+                vy: -0.1 - Math.random()*0.1,
+                color: PALETTE.scrollIndicator,
+                life: 1.0,
+                size: Math.random() * 3 + 1,
+                type: 'spark'
+            });
+        }
+    }
+}
+
+// 新增：链球目标粒子效果
+function spawnChainTargetParticles(x, y, color = PALETTE.chainTarget) {
+    for(let i=0;i<12;i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.1 + Math.random() * 0.2;
+        game.particles.push({
+            x: x+0.5, y: y+0.5,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            color: color,
+            life: 1.0,
+            size: Math.random() * 3 + 2,
+            type: 'spark'
+        });
+    }
+}
+
+// 新增：链球目标破坏效果
+function spawnChainTargetDestroy(x, y) {
+    for(let i=0;i<25;i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.2 + Math.random() * 0.3;
+        game.particles.push({
+            x: x+0.5, y: y+0.5,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            color: i % 2 === 0 ? PALETTE.chainTarget : '#ffffff',
+            life: 1.5,
+            size: Math.random() * 4 + 2,
+            type: 'debris'
+        });
+    }
+}
+
+function drawParticles(TS, visualOffset = 0) {
+    game.particles.forEach(p => {
+        ctx.globalAlpha = p.life; 
+        ctx.fillStyle = p.color;
+        
+        // 新增：不同粒子类型的绘制
+        if (p.type === 'heart') {
+            // 心形粒子（简化）
+            const size = p.size * TS * 0.08;
+            ctx.beginPath();
+            ctx.moveTo((p.x) * TS, (p.y + visualOffset) * TS);
+            ctx.bezierCurveTo(
+                (p.x) * TS - size, (p.y + visualOffset) * TS - size/2,
+                (p.x) * TS - size, (p.y + visualOffset) * TS + size/2,
+                (p.x) * TS, (p.y + visualOffset) * TS + size
+            );
+            ctx.bezierCurveTo(
+                (p.x) * TS + size, (p.y + visualOffset) * TS + size/2,
+                (p.x) * TS + size, (p.y + visualOffset) * TS - size/2,
+                (p.x) * TS, (p.y + visualOffset) * TS
+            );
+            ctx.fill();
+        } else if (p.type === 'spark' || p.type === 'debris') {
+            // 火花/碎片粒子
+            const size = p.size * TS * 0.05;
+            ctx.fillRect((p.x) * TS - size/2, (p.y + visualOffset) * TS - size/2, size, size);
+        } else {
+            // 默认方形粒子
+            const size = p.size * TS * 0.1; 
+            ctx.fillRect((p.x) * TS, (p.y + visualOffset) * TS, size, size);
+        }
+        
+        ctx.globalAlpha = 1.0;
+    });
+}
+
+// --- 初始化逻辑 ---
+function init() { 
+    resize(); 
+    
+    // 初始化音频
+    const audioToggle = document.getElementById('audio-toggle');
+    audioToggle.addEventListener('click', () => {
+        audioManager.toggle();
+    });
+    
+    // 音频需要在用户交互后初始化
+    function initAudioOnInteraction() {
+        if (!audioManager.audioContext) {
+            audioManager.init();
+        }
+        document.removeEventListener('click', initAudioOnInteraction);
+        document.removeEventListener('touchstart', initAudioOnInteraction);
+        document.removeEventListener('keydown', initAudioOnInteraction);
+    }
+    
+    document.addEventListener('click', initAudioOnInteraction);
+    document.addEventListener('touchstart', initAudioOnInteraction);
+    document.addEventListener('keydown', initAudioOnInteraction);
+    
+    loadLevel(0); 
+    window.requestAnimationFrame(loop); 
+}
+
+function resetGame() { loadLevel(game.currentLevelIdx); }
+
+function loadLevel(idx) {
+    if (idx<0 || idx>=LEVELS.length) idx=0;
+    if (LEVELS[idx].type==='SKIP') { loadLevel(idx+1); return; }
+    game.currentLevelIdx = idx;
+    const lvl = LEVELS[idx];
+    document.getElementById('level-indicator').innerText = lvl.title;
+    
+    game.entities=[]; game.particles=[]; game.inputLocked=false;
+    game.beat=0; game.state='PLAYING';
+    elBossHP.style.display='none';
+    scrollIndicator.style.display = 'none';
+    elInfoInd.innerHTML=''; elInfoInd.classList.remove('visible');
+    elKeyInd.classList.remove('visible');
+    game.chainTargetsVisible = false;
+    game.scrollWarningActive = false;
+    game.lastScrollTick = 0;
+    
+    // 播放关卡切换音效
+    if (audioManager && audioManager.playButtonClickSound) {
+        audioManager.playButtonClickSound();
+    }
+    
+    // 播放对应的背景音乐
+    if (audioManager && audioManager.playMusic) {
+        if (lvl.type === 'BOSS') {
+            audioManager.playMusic('boss');
+        } else {
+            audioManager.playMusic('level');
+        }
+    }
+    
+    if (lvl.type === 'PUZZLE') initPuzzle(lvl);
+    else initBoss(lvl);
+    
+    updateUI(); hideModals();
+}
+
+function initPuzzle(lvl) {
+    const conf=lvl.config; game.grid=[]; game.spikes=[]; game.toggleSpikes=[]; 
+    game.hasKey=false; game.moves=conf.maxMoves; game.toggleState=0; game.cameraY=0; game.bossPhase=-1;
+    for(let y=0; y<lvl.map.length; y++) {
+        let row=[]; for(let x=0; x<lvl.map[y].length; x++) row.push(parseInt(lvl.map[y][x]));
+        game.grid.push(row);
+    }
+    const toCY = r => (conf.rows-1)-r;
+    game.player = createEntity(conf.heroStart.c, toCY(conf.heroStart.r), 'hero');
+    game.entities.push(game.player); game.cameraY = game.player.vy;
+    if(conf.girls) conf.girls.forEach(p=>game.entities.push(createEntity(p.c,toCY(p.r),'girl')));
+    if(conf.rocks) conf.rocks.forEach(p=>game.entities.push(createEntity(p.c,toCY(p.r),'rock')));
+    if(conf.mobs) conf.mobs.forEach(p=>game.entities.push(createEntity(p.c,toCY(p.r),'mob')));
+    if(conf.keys) conf.keys.forEach(p=>game.entities.push(createEntity(p.c,toCY(p.r),'key')));
+    if(conf.locks) conf.locks.forEach(p=>game.entities.push(createEntity(p.c,toCY(p.r),'lock')));
+    if(conf.spikes) conf.spikes.forEach(p=>game.spikes.push({x:p.c,y:toCY(p.r)}));
+    if(conf.toggleSpikes) conf.toggleSpikes.forEach(p=>game.toggleSpikes.push({x:p.c,y:toCY(p.r),startActive:p.startActive===true}));
+}
+
+function initBoss(lvl) {
+    const conf=lvl.config; game.bossPhase=0; game.bossTime=0; game.hp=conf.maxHP;
+    game.scrollTimer=0; game.invuln=0; game.grid=[]; game.activeChains=[];
+    game.chainTargetPulse = 0;
+    for(let r=0; r<7; r++) game.grid.push([0,0,0,0,0,0,0]);
+    game.player = createEntity(3,3,'hero'); game.entities.push(game.player);
+    elBossHPFill.style.width='100%';
+}
+
+// --- 游戏循环 ---
+function loop(timestamp) {
+    let dt = (timestamp - game.lastTime)/1000; if(dt>0.1) dt=0.1;
+    game.lastTime = timestamp;
+    if(game.state==='PLAYING') {
+        if(LEVELS[game.currentLevelIdx].type==='BOSS') updateBoss(dt);
+        else updatePuzzle(dt);
+    }
+    draw(); window.requestAnimationFrame(loop);
+}
+
+function updatePuzzle(dt) {
+    game.beat = (Date.now()/500)%1;
+    const conf = LEVELS[game.currentLevelIdx].config;
+    if(conf.cameraFollow) game.cameraY += (game.player.vy - game.cameraY)*0.1;
+    game.entities.forEach(e=>{ e.vx+=(e.x-e.vx)*0.25; e.vy+=(e.y-e.vy)*0.25; });
+    for(let i=game.particles.length-1; i>=0; i--){
+        let p=game.particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.015; p.life-=2.0*dt;
+        if(p.life<=0) game.particles.splice(i,1);
+    }
+}
+
+function updateBoss(dt) {
+    const conf = LEVELS[game.currentLevelIdx].config;
+    game.bossTime += dt;
+    game.beat = (game.bossTime*2.5)%1;
+    if(game.invuln>0) game.invuln-=dt;
+
+    // 更新链球目标脉冲效果
+    game.chainTargetPulse += dt * 3;
+    
+    // 更新链球目标实体的动画状态
+    game.entities.forEach(e => {
+        if (e.type === 'chain_target') {
+            e.pulse += dt * 2;
+            if (e.hitFlash > 0) {
+                e.hitFlash -= dt * 4;
+                if (e.hitFlash < 0) e.hitFlash = 0;
+            }
+            if (e.shake > 0) {
+                e.shake -= dt * 6;
+                if (e.shake < 0) e.shake = 0;
+            }
+        }
+    });
+
+    if(game.bossPhase===0) {
+        if(game.bossTime > conf.scrollDelay) game.bossPhase=1;
+    }
+
+    if(game.bossPhase===1) {
+        const oldTimer = game.scrollTimer;
+        game.scrollTimer += dt;
+        
+        // 更新滚动指示器
+        updateScrollIndicator(game.scrollTimer / 2.0);
+        
+        // 滚动警告效果
+        if (game.scrollTimer > 1.5 && game.scrollTimer < 2.0) {
+            if (!game.scrollWarningActive) {
+                game.scrollWarningActive = true;
+                // 播放滚动警告音效
+                if (audioManager && audioManager.playScrollWarningSound) {
+                    audioManager.playScrollWarningSound();
+                }
+            }
+            
+            // 生成预警粒子
+            if (Math.random() < 0.3) {
+                spawnScrollWarningParticles();
+            }
+        } else {
+            game.scrollWarningActive = false;
+        }
+        
+        // 滚动滴答声
+        if (game.scrollTimer > 0.5 && Math.floor(game.scrollTimer * 4) !== Math.floor(game.lastScrollTick * 4)) {
+            if (audioManager && audioManager.playScrollTickSound) {
+                audioManager.playScrollTickSound();
+            }
+            game.lastScrollTick = game.scrollTimer;
+        }
+        
+        // 滚动开始时生成粒子效果
+        if (Math.floor(oldTimer / 2.0) !== Math.floor(game.scrollTimer / 2.0)) {
+            // 播放滚动开始音效
+            if (audioManager && audioManager.playScrollStartSound) {
+                audioManager.playScrollStartSound();
+            }
+            
+            for(let c=0; c<7; c++) {
+                spawnSpikeParticles(c, 6);
+                spawnParticle(c, 6.5, PALETTE.bone);
+            }
+        }
+        
+        if (game.scrollTimer >= 2.0) {
+            game.scrollTimer -= 2.0;
+            game.player.y -= 1; 
+            game.player.vy -= 1;
+            if (game.player.y < 0) takeDamage();
+        }
+
+        if(game.player.y < 0 || game.player.y > 6) takeDamage();
+
+        conf.chains.forEach(evt => {
+            if(game.bossTime >= evt.t && game.bossTime < evt.t + 0.75) {
+                if(!game.activeChains.find(c=>c.t===evt.t)) {
+                    game.activeChains.push({t:evt.t, v:evt.v, state:'WARN', timer:0});
+                    // 播放链条警告音效
+                    if (audioManager && audioManager.playChainWarningSound) {
+                        audioManager.playChainWarningSound();
+                    }
+                }
+            }
+        });
+        game.activeChains.forEach(c => {
+            c.timer += dt;
+            if(c.state==='WARN' && c.timer >= 0.75) {
+                c.state = 'HIT'; screenShake(5);
+                c.v.forEach(col => { if(Math.abs(game.player.x - col) < 0.6) takeDamage(); });
+                
+                // 播放链条攻击音效
+                if (audioManager && audioManager.playChainAttackSound) {
+                    audioManager.playChainAttackSound();
+                }
+            }
+            if(c.timer >= 1.0) c.done=true;
+        });
+        game.activeChains = game.activeChains.filter(c=>!c.done);
+
+        if(game.bossTime >= conf.phaseTime) {
+            game.bossPhase = 2;
+            game.player.y = Math.round(game.player.y); game.player.x = Math.round(game.player.x);
+            
+            // 创建链球目标，添加额外属性
+            let leftTarget = createEntity(0,3,'chain_target');
+            leftTarget.hp = conf.chainMaxHP;
+            leftTarget.pulse = 0;
+            leftTarget.hitFlash = 0;
+            leftTarget.shake = 0;
+            game.entities.push(leftTarget);
+            
+            let rightTarget = createEntity(6,3,'chain_target');
+            rightTarget.hp = conf.chainMaxHP;
+            rightTarget.pulse = 0;
+            rightTarget.hitFlash = 0;
+            rightTarget.shake = 0;
+            game.entities.push(rightTarget);
+            
+            elBossHP.style.display='block';
+            scrollIndicator.style.display = 'none';
+        }
+    }
+
+    game.player.vx += (game.player.x - game.player.vx)*0.5;
+    
+    if(game.bossPhase===1) {
+        let visualOffset = 0;
+        if (game.scrollTimer > 0.5) {
+            const scrollPhase = (game.scrollTimer - 0.5) / 1.5;
+            visualOffset = -easeInOutQuad(scrollPhase);
+        }
+        game.player.vy = game.player.y + visualOffset;
+    } else {
+        game.player.vy += (game.player.y - game.player.vy)*0.5;
+    }
+
+    for(let i=game.particles.length-1; i>=0; i--){
+        let p=game.particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.015; p.life-=2.0*dt;
+        if(p.life<=0) game.particles.splice(i,1);
+    }
+}
+
+function takeDamage() {
+    if(game.invuln>0 || game.state!=='PLAYING') return;
+    game.hp--; game.invuln=1.5; screenShake(10); spawnBlood(game.player.vx, game.player.vy);
+    
+    // 播放受伤音效
+    if (audioManager && audioManager.playDamageSound) {
+        audioManager.playDamageSound();
+    }
+    
+    updateUI();
+    if(game.hp<=0) {
+        game.state='LOST';
+        
+        // 播放失败音乐
+        if (audioManager && audioManager.playMusic) {
+            audioManager.playMusic('defeat');
+        }
+        
+        setTimeout(()=>showModal('dialogue',"GAME OVER","Judgement has claimed your soul.","RETRY"),300);
+    }
+}
+
+// --- 输入处理 ---
+function handleInput(dx, dy) {
+    if(game.state!=='PLAYING' || game.inputLocked) return;
+    if(LEVELS[game.currentLevelIdx].type==='BOSS') handleBossInput(dx,dy);
+    else handlePuzzleInput(dx,dy);
+}
+
+function handleBossInput(dx, dy) {
+    if(dx!==0) game.player.dir=dx;
+    let tx = Math.round(game.player.x)+dx; let ty = Math.round(game.player.y)+dy;
+    if(tx<0||tx>6||ty<0||ty>6) return;
+
+    if(game.bossPhase===2) {
+        let chains = game.entities.filter(e=>e.type==='chain_target');
+        let hit = chains.find(c=>c.x===tx && c.y===ty);
+        if(hit) {
+            hit.hp--;
+            hit.hitFlash = 1.0; // 受击闪烁
+            hit.shake = 1.0; // 震动效果
+            
+            // 显示伤害数字
+            const canvasRect = canvas.getBoundingClientRect();
+            const containerRect = elContainer.getBoundingClientRect();
+            const x = containerRect.left + (hit.x + 0.5) * (canvas.width / 7);
+            const y = containerRect.top + (hit.y + 0.5) * (canvas.height / 7);
+            showDamageNumber(x, y, '1');
+            
+            spawnChainTargetParticles(tx, ty, hit.hp <= 2 ? PALETTE.chainTargetDamage : PALETTE.chainTarget);
+            spawnImpact(tx,ty); 
+            screenShake(5);
+            
+            // 播放链球目标受击音效
+            if (audioManager && audioManager.playChainTargetHitSound) {
+                audioManager.playChainTargetHitSound();
+            }
+            
+            // 血量较低时的特殊音效
+            if (hit.hp <= 2) {
+                if (audioManager && audioManager.playChainTargetDamageSound) {
+                    audioManager.playChainTargetDamageSound();
+                }
+            }
+            
+            if(hit.hp<=0) { 
+                hit.dead=true; 
+                
+                // 播放链球目标破坏音效
+                if (audioManager && audioManager.playChainTargetDestroySound) {
+                    audioManager.playChainTargetDestroySound();
+                }
+                
+                spawnChainTargetDestroy(tx, ty);
+                game.entities=game.entities.filter(e=>!e.dead); 
+            }
+            let totalHP = game.entities.filter(e=>e.type==='chain_target').reduce((s,c)=>s+c.hp,0);
+            elBossHPFill.style.width = (totalHP/10*100)+'%';
+            
+            // 播放BOSS受伤音效
+            if (audioManager && audioManager.playBossDamageSound) {
+                audioManager.playBossDamageSound();
+            }
+            
+            if(totalHP<=0) {
+                game.state='WON';
+                
+                // 播放BOSS击败音效
+                if (audioManager && audioManager.playBossDefeatSound) {
+                    audioManager.playBossDefeatSound();
+                }
+                
+                // 播放胜利音乐
+                if (audioManager && audioManager.playMusic) {
+                    audioManager.playMusic('victory');
+                }
+                
+                setTimeout(()=>showModal('dialogue',"SUCCESS","Judgement: 'FINE! I'll join you!'","MENU"),500);
+            }
+            return;
+        }
+    }
+    game.player.x=tx; game.player.y=ty; 
+    
+    // 播放移动音效
+    if (audioManager && audioManager.playStepSound) {
+        audioManager.playStepSound();
+    }
+    
+    lockInput(120);
+}
+
+function handlePuzzleInput(dx, dy) {
+    if(dx!==0) game.player.dir=dx;
+    let tx=game.player.x+dx, ty=game.player.y+dy;
+    let conf=LEVELS[game.currentLevelIdx].config;
+    if(isVoid(tx,ty,conf)) { screenShake(3); return; }
+    
+    let targetEntities = getEntitiesAt(tx, ty);
+    let blocker = targetEntities.find(e => ['rock', 'mob', 'lock', 'girl'].includes(e.type));
+    let turnPassed = false, playerMoves = false, cost = 1;
+    let nextToggleState = 1 - game.toggleState;
+
+    if (!blocker) { turnPassed=true; playerMoves=true; }
+    else {
+        if(blocker.type==='girl') checkWin();
+        else if(blocker.type==='lock') { 
+            if(game.hasKey){ 
+                blocker.dead=true; 
+                game.hasKey=false; 
+                spawnSparkles(tx,ty,'#fff'); 
+                screenShake(5); 
+                turnPassed=true; 
+                playerMoves=true;
+                
+                // 播放开锁音效
+                if (audioManager && audioManager.playUnlockSound) {
+                    audioManager.playUnlockSound();
+                }
+            } else screenShake(3); 
+        }
+        else if(blocker.type==='rock') { 
+            let bx=tx+dx, by=ty+dy; 
+            let behindBlocker = getEntitiesAt(bx,by).find(e=>['rock','mob','lock','girl'].includes(e.type));
+            if(!isVoid(bx,by,conf) && !behindBlocker) { 
+                blocker.x=bx; blocker.y=by; 
+                spawnDust(tx,ty); 
+                turnPassed=true; 
+                playerMoves=false; 
+                
+                // 播放推动音效
+                if (audioManager && audioManager.playPushSound) {
+                    audioManager.playPushSound();
+                }
+            } else screenShake(3); 
+        }
+        else if(blocker.type==='mob') { 
+            let bx=tx+dx, by=ty+dy; 
+            let behindBlocker = getEntitiesAt(bx,by).some(e=>['rock','mob','lock','girl'].includes(e.type));
+            if(!isVoid(bx,by,conf) && !behindBlocker) { 
+                blocker.x=bx; blocker.y=by; 
+                spawnImpact(tx,ty); 
+                turnPassed=true; 
+                playerMoves=false; 
+                
+                // 播放推动音效
+                if (audioManager && audioManager.playPushSound) {
+                    audioManager.playPushSound();
+                }
+            } else { 
+                blocker.dead=true; 
+                spawnExplosion(tx,ty); 
+                screenShake(8); 
+                turnPassed=true; 
+                playerMoves=false; 
+                
+                // 播放击败骷髅音效
+                if (audioManager && audioManager.playMobKillSound) {
+                    audioManager.playMobKillSound();
+                }
+            }
+        }
+    }
+
+    if(turnPassed) {
+        if(playerMoves) {
+            game.player.x=tx; game.player.y=ty;
+            let k = getEntitiesAt(tx,ty).find(e=>e.type==='key');
+            if(k) { 
+                k.dead=true; 
+                game.hasKey=true; 
+                spawnSparkles(tx,ty,PALETTE.key); 
+                
+                // 播放拾取钥匙音效
+                if (audioManager && audioManager.playKeyPickupSound) {
+                    audioManager.playKeyPickupSound();
+                }
+            }
+            
+            // 播放移动音效
+            if (audioManager && audioManager.playStepSound) {
+                audioManager.playStepSound();
+            }
+        }
+        let fx=game.player.x, fy=game.player.y;
+        if(isSpike(fx,fy)) cost=2;
+        let ts=game.toggleSpikes.find(s=>s.x===fx && s.y===fy);
+        if(ts && ((ts.startActive && nextToggleState===0) || (!ts.startActive && nextToggleState===1))) cost=2;
+        
+        game.moves-=cost; game.toggleState=nextToggleState;
+        
+        // 播放切换机关音效
+        if (game.toggleState !== nextToggleState && audioManager && audioManager.playToggleSound) {
+            audioManager.playToggleSound();
+        }
+        
+        let activeState = game.toggleState===1; 
+        game.toggleSpikes.forEach(s => {
+            let active = s.startActive ? !activeState : activeState;
+            if(active) getEntitiesAt(s.x,s.y).filter(e=>e.type==='mob').forEach(m=>{
+                m.dead=true; 
+                spawnExplosion(s.x,s.y);
+                
+                // 播放尖刺击杀音效
+                if (audioManager && audioManager.playSpikeSound) {
+                    audioManager.playSpikeSound();
+                }
+            });
+        });
+
+        if(cost>1) { 
+            spawnBlood(game.player.vx, game.player.vy); 
+            screenShake(4); 
+            
+            // 播放尖刺伤害音效
+            if (audioManager && audioManager.playSpikeSound) {
+                audioManager.playSpikeSound();
+            }
+        }
+        game.entities=game.entities.filter(e=>!e.dead);
+        updateUI(); lockInput(100); checkWin();
+        if(game.state!=='WON' && game.moves<=0) { 
+            game.state='LOST'; 
+            
+            // 播放失败音乐
+            if (audioManager && audioManager.playMusic) {
+                audioManager.playMusic('defeat');
+            }
+            
+            setTimeout(()=>showModal('dialogue',"GAME OVER","You ran out of Willpower.","RETRY"),300); 
+        }
+    }
+}
+
+function checkWin() {
+    let girls = game.entities.filter(e=>e.type==='girl');
+    if(girls.some(g=>Math.abs(game.player.x-g.x)+Math.abs(game.player.y-g.y)<=1)) {
+        game.state='WON';
+        const isLast=game.currentLevelIdx===LEVELS.length-1;
+        
+        // 播放恶魔女孩音效
+        if (audioManager && audioManager.playGirlSound) {
+            audioManager.playGirlSound();
+        }
+        
+        // 播放胜利音乐
+        if (audioManager && audioManager.playMusic) {
+            audioManager.playMusic('victory');
+        }
+        
+        setTimeout(()=>showModal('dialogue',"SUCCESS",`"${LEVELS[game.currentLevelIdx].demonLine}"`,isLast?"FINISH":"NEXT"),200);
+        girls.forEach(g=>spawnHearts(g.vx,g.vy));
+    }
+}
+
+// --- 绘制函数 ---
+function draw() {
+    ctx.fillStyle = PALETTE.void; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if(LEVELS[game.currentLevelIdx].type==='BOSS') drawBossScene();
+    else drawPuzzleScene();
+}
+
+function drawBossScene() {
+    const padding=20;
+    const TS = Math.floor(Math.min((canvas.width-padding*2)/7, (canvas.height-padding*2)/7));
+    const startX=(canvas.width-TS*7)/2, startY=(canvas.height-TS*7)/2;
+    ctx.save(); ctx.translate(startX, startY);
+
+    let visualOffset = 0;
+    let extraRow1Offset=0, extraRow2Offset=0, topSpikeAlpha=1, bottomSpikeAlpha=0;
+    
+    if(game.bossPhase===1) {
+        const progress = game.scrollTimer / 2.0; 
+        const easedProgress = easeInOutQuad(progress);
+        
+        // 绘制滚动警告效果
+        if (game.scrollWarningActive) {
+            const warningPulse = 0.5 + 0.5 * Math.sin(game.bossTime * 10);
+            ctx.fillStyle = `rgba(255, 0, 68, ${0.3 * warningPulse})`;
+            ctx.fillRect(0, 6 * TS, 7 * TS, TS);
+        }
+        
+        // 第-1行动画
+        if(easedProgress < 0.25) { 
+            extraRow1Offset = -1 + (easedProgress/0.25); 
+        } else { 
+            extraRow1Offset = 0; 
+        }
+        
+        // 第7行动画
+        if(easedProgress >= 0.125 && easedProgress < 0.375) { 
+            extraRow2Offset = 1 - ((easedProgress-0.125)/0.25); 
+        } else if(easedProgress >= 0.375) { 
+            extraRow2Offset = 0; 
+        }
+
+        // 尖刺动画 - 改进：添加弹性效果
+        if(easedProgress >= 0.25 && easedProgress < 0.5) {
+            let sp = (easedProgress-0.25)/0.25; 
+            topSpikeAlpha = 1-sp; 
+            bottomSpikeAlpha = sp;
+        } else if(easedProgress >= 0.5) { 
+            topSpikeAlpha=0; 
+            bottomSpikeAlpha=1; 
+        }
+
+        // 滚动动画
+        if(easedProgress >= 0.5) {
+            const scrollPhase = (easedProgress - 0.5) / 0.5;
+            visualOffset = -easeInOutQuad(scrollPhase);
+        }
+    }
+    
+    // 绘制地图
+    for(let r=-2; r<=8; r++) {
+        for(let c=0; c<7; c++) {
+            let drawY = (r + visualOffset) * TS;
+            if(r===-1) drawY += extraRow1Offset * TS;
+            if(r===7) drawY += extraRow2Offset * TS;
+
+            if(drawY > -TS && drawY < canvas.height - startY + TS) {
+                ctx.fillStyle = (c+r)%2===0 ? PALETTE.floor1 : PALETTE.floor2;
+                ctx.fillRect(c*TS, drawY, TS, TS);
+                
+                // 绘制地刺 - 改进：添加高度变化和发光效果
+                if(r===0) drawSpike(ctx,c*TS,drawY,TS,true,false,topSpikeAlpha, 1.0, game.scrollTimer);
+                if(r===6) drawSpike(ctx,c*TS,drawY,TS,true,false,bottomSpikeAlpha, 1.0, game.scrollTimer);
+                if(r===-1 && extraRow1Offset===0) drawSpike(ctx,c*TS,drawY,TS,true,false,1, extraRow1Offset===0?1:0, game.scrollTimer);
+                if(r===7 && extraRow2Offset===0) drawSpike(ctx,c*TS,drawY,TS,true,false,1, extraRow2Offset===0?1:0, game.scrollTimer);
+            }
+        }
+    }
+
+    // 绘制链条（跟随滚动）
+    game.activeChains.forEach(c => {
+        ctx.fillStyle = c.state==='WARN' ? PALETTE.chainWarn : PALETTE.chain;
+        c.v.forEach(col => {
+            const y = visualOffset * TS;
+            ctx.fillRect(col*TS + TS*0.2, y, TS*0.6, 7*TS);
+        });
+    });
+
+    // 绘制BOSS第二阶段链球目标
+    game.entities.forEach(e => {
+        if (e.type === 'chain_target') {
+            drawChainTarget(ctx, e, e.vx*TS, (e.y + visualOffset)*TS, TS);
+        }
+    });
+
+    // 绘制玩家
+    const CX = game.player.vx*TS + TS/2; 
+    const CY = (game.player.y + visualOffset)*TS + TS/2;
+    ctx.save();
+    ctx.translate(CX, CY);
+    if(game.invuln<=0 || Math.floor(Date.now()/100)%2===0) drawHero(ctx, TS, 0, game.player.dir);
+    ctx.restore();
+    
+    // 绘制粒子（应用视觉偏移）
+    drawParticles(TS, visualOffset);
+    ctx.restore();
+}
+
+function drawPuzzleScene() {
+    const conf = LEVELS[game.currentLevelIdx].config;
+    const padding = 20; const availW=canvas.width-padding*2, availH=canvas.height-padding*2;
+    let TS = Math.floor(Math.min(availW/conf.cols, availH/conf.rows));
+    if(conf.cameraFollow) TS = Math.floor(availW/conf.cols);
+    const startX=(canvas.width-TS*conf.cols)/2;
+    let startY = (canvas.height-TS*conf.rows)/2;
+    if(conf.cameraFollow) {
+        const centerY = canvas.height/2; const py = game.cameraY * TS + TS/2;
+        startY = Math.max(canvas.height-(conf.rows*TS)-padding, Math.min(padding, centerY-py));
+    }
+    ctx.save(); ctx.translate(startX, startY);
+    for(let y=0; y<conf.rows; y++){
+        for(let x=0; x<conf.cols; x++){
+            if(game.grid[y][x]===8) continue;
+            ctx.fillStyle = ((x+y)%2===0)?PALETTE.floor1:PALETTE.floor2; ctx.fillRect(x*TS, y*TS, TS, TS);
+            if(isSpike(x,y)) drawSpike(ctx,x*TS,y*TS,TS,true);
+            let ts=game.toggleSpikes.find(s=>s.x===x && s.y===y);
+            if(ts) drawSpike(ctx,x*TS,y*TS,TS,isToggleSpikeActive(ts),true);
+            if(y===conf.rows-1 || game.grid[y+1][x]===8) { ctx.fillStyle=PALETTE.wallSide; ctx.fillRect(x*TS,y*TS+TS,TS,TS*0.2); }
+        }
+    }
+    game.entities.sort((a,b)=>{ if(a.vy!==b.vy)return a.vy-b.vy; let za=(a.type==='key')?0:(a.type==='hero'?2:1); let zb=(b.type==='key')?0:(b.type==='hero'?2:1); return za-zb; });
+    game.entities.forEach(e=>{
+        const CX=e.vx*TS+TS/2, CY=e.vy*TS+TS/2; const bop=Math.sin(game.beat*Math.PI*2)*(TS*0.03);
+        ctx.save(); ctx.translate(CX,CY);
+        if(e.type!=='key') { ctx.fillStyle=PALETTE.shadow; ctx.beginPath(); ctx.ellipse(0,TS*0.35,TS*0.3,TS*0.1,0,0,Math.PI*2); ctx.fill(); }
+        if(e.type==='hero') drawHero(ctx,TS,bop,e.dir);
+        else if(e.type==='girl') drawGirl(ctx,TS,bop,e.vx,e.vy);
+        else if(e.type==='rock') drawRock(ctx,TS,game.currentLevelIdx+1);
+        else if(e.type==='mob') drawMob(ctx,TS,bop);
+        else if(e.type==='key') drawKey(ctx,TS,bop);
+        else if(e.type==='lock') drawLock(ctx,TS);
+        ctx.restore();
+    });
+    drawParticles(TS);
+    ctx.restore();
+}
+
+// --- 绘制辅助函数 ---
+function drawKey(ctx,s,b){ ctx.translate(0,b); ctx.fillStyle=PALETTE.key; ctx.beginPath(); ctx.arc(0,-s*0.1,s*0.15,0,Math.PI*2); ctx.fill(); ctx.fillRect(-s*0.05,0,s*0.1,s*0.3); ctx.fillRect(0,s*0.15,s*0.15,s*0.08); }
+function drawLock(ctx,s){ ctx.fillStyle=PALETTE.lock; ctx.fillRect(-s*0.35,-s*0.2,s*0.7,s*0.6); ctx.strokeStyle=PALETTE.lock; ctx.lineWidth=s*0.08; ctx.beginPath(); ctx.arc(0,-s*0.2,s*0.15,Math.PI,0); ctx.stroke(); ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(0,s*0.1,s*0.08,0,Math.PI*2); ctx.fill(); }
+
+// 改进的地刺绘制函数
+function drawSpike(ctx,x,y,s,active,toggle,alpha=1, heightFactor=1.0, scrollTimer=0){ 
+    ctx.save(); 
+    ctx.globalAlpha=alpha; 
+    
+    // 添加发光效果
+    if (active && heightFactor > 0) {
+        const glowAlpha = 0.3 * heightFactor * (0.8 + 0.2 * Math.sin(scrollTimer * 10));
+        ctx.fillStyle = toggle ? `rgba(255, 50, 50, ${glowAlpha})` : `rgba(255, 0, 0, ${glowAlpha})`;
+        ctx.beginPath();
+        ctx.rect(x, y + s*0.7, s, s*0.3);
+        ctx.fill();
+    }
+    
+    if(active){ 
+        const baseHeight = toggle ? s*0.6 : s*0.4;
+        const pulseHeight = 1.0 + 0.2 * Math.sin(scrollTimer * 15); // 脉冲效果
+        const h = baseHeight * heightFactor * pulseHeight;
+        
+        ctx.fillStyle=toggle?PALETTE.spikeActive:PALETTE.spike; 
+        
+        // 绘制三个尖刺
+        for(let i = 0; i < 3; i++) {
+            const spikeX = x + s*0.2 + i * s*0.25;
+            ctx.beginPath();
+            ctx.moveTo(spikeX, y + s*0.8);
+            ctx.lineTo(spikeX + s*0.1, y + s*0.8 - h);
+            ctx.lineTo(spikeX + s*0.2, y + s*0.8);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 添加高光
+            if (heightFactor > 0.5) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.beginPath();
+                ctx.moveTo(spikeX + s*0.05, y + s*0.8 - h*0.3);
+                ctx.lineTo(spikeX + s*0.08, y + s*0.8 - h*0.5);
+                ctx.lineTo(spikeX + s*0.12, y + s*0.8 - h*0.3);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle=toggle?PALETTE.spikeActive:PALETTE.spike;
+            }
+        }
+    } else { 
+        ctx.fillStyle='rgba(0,0,0,0.4)'; 
+        ctx.beginPath(); ctx.moveTo(x+s*0.1,y+s*0.9); ctx.lineTo(x+s*0.3,y+s*0.7); ctx.stroke(); 
+        ctx.beginPath(); ctx.moveTo(x+s*0.9,y+s*0.9); ctx.lineTo(x+s*0.7,y+s*0.7); ctx.stroke(); 
+        ctx.beginPath(); ctx.arc(x+s*0.5,y+s*0.5,s*0.1,0,Math.PI*2); ctx.fill(); 
+    } 
+    ctx.restore(); 
+}
+
+function drawHero(ctx,s,b,d){ const w=s*0.4, h=s*0.6; ctx.translate(0,b); ctx.fillStyle=PALETTE.heroSuit; ctx.fillRect(-w/2,-h/2,w,h); ctx.fillStyle=PALETTE.heroShirt; ctx.fillRect(-w/4,-h/2,w/2,h); ctx.fillStyle=PALETTE.demonRed; ctx.fillRect(-w/8,-h/4,w/4,h/3); ctx.fillStyle=PALETTE.heroSkin; ctx.fillRect(-w/2+2,-h-5,w-4,w); ctx.fillStyle='#000'; ctx.fillRect(-w/2,-h+2,w,s*0.08); }
+function drawGirl(ctx,s,b,vx,vy){ const w=s*0.4, h=s*0.55; ctx.translate(0,b); ctx.fillStyle=PALETTE.demonRed; ctx.fillRect(-w/2,-h/2,w,h); ctx.fillStyle=PALETTE.demonSkin; ctx.fillRect(-w/2+2,-h-5,w-4,w); ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-h,s*0.25,0,Math.PI,true); ctx.fill(); ctx.fillStyle='#000'; ctx.beginPath(); ctx.moveTo(-10,-h-10); ctx.lineTo(-15,-h-25); ctx.lineTo(-5,-h-10); ctx.moveTo(10,-h-10); ctx.lineTo(15,-h-25); ctx.lineTo(5,-h-10); ctx.fill(); if(Math.random()<0.05) spawnParticle(vx,vy,PALETTE.demonRed,'heart'); }
+function drawMob(ctx,s,b){ ctx.translate(0,b); ctx.fillStyle=PALETTE.bone; ctx.beginPath(); ctx.arc(0,-s*0.2,s*0.18,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#000'; ctx.fillRect(-5,-s*0.25,4,4); ctx.fillRect(3,-s*0.25,4,4); ctx.fillStyle=PALETTE.bone; ctx.fillRect(-s*0.15,0,s*0.3,s*0.3); ctx.fillStyle='#000'; ctx.fillRect(-s*0.1,s*0.1,s*0.2,s*0.05); }
+function drawRock(ctx,s,n){ ctx.fillStyle=PALETTE.rock; ctx.fillRect(-s*0.35,-s*0.35,s*0.7,s*0.7); const r=["I","II","III","IV","V","VI","VII","VIII","IX","X"][n-1]||"X"; ctx.fillStyle='#ccc'; ctx.font='bold 20px serif'; ctx.textAlign='center'; ctx.fillText(r,0,5); }
+
+// 优化后的链球目标绘制函数
+function drawChainTarget(ctx, entity, x, y, s) {
+    const shakeOffset = entity.shake > 0 ? (Math.random() - 0.5) * entity.shake * 4 : 0;
+    
+    // 脉动效果
+    const pulseFactor = 0.9 + 0.15 * Math.sin(entity.pulse);
+    const radius = s * 0.3 * pulseFactor;
+    
+    // 受击闪烁效果
+    let fillColor = PALETTE.chainTarget;
+    let glowColor = PALETTE.chainTargetGlow;
+    
+    if (entity.hitFlash > 0) {
+        // 混合红色和蓝色
+        const redAmount = entity.hitFlash;
+        const blueAmount = 1 - entity.hitFlash;
+        fillColor = `rgb(${Math.floor(255 * redAmount)}, ${Math.floor(100 * blueAmount)}, ${Math.floor(255 * blueAmount)})`;
+        glowColor = `rgba(255, ${Math.floor(150 * blueAmount)}, ${Math.floor(255 * blueAmount)}, ${0.7})`;
+    } else if (entity.hp <= 2) {
+        // 低血量时的警告颜色
+        const warningPulse = 0.5 + 0.5 * Math.sin(entity.pulse * 3);
+        fillColor = `rgb(${Math.floor(255 * warningPulse)}, ${Math.floor(100 * (1 - warningPulse))}, ${Math.floor(100 * (1 - warningPulse))})`;
+        glowColor = `rgba(255, ${Math.floor(150 * (1 - warningPulse))}, ${Math.floor(150 * (1 - warningPulse))}, ${0.7})`;
+    }
+    
+    // 绘制外发光
+    ctx.save();
+    ctx.translate(shakeOffset, 0);
+    
+    // 外发光
+    const gradient = ctx.createRadialGradient(
+        x + s/2, y + s/2, radius,
+        x + s/2, y + s/2, radius * 1.8
+    );
+    gradient.addColorStop(0, glowColor);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x + s/2, y + s/2, radius * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 绘制链球主体
+    ctx.fillStyle = fillColor;
+    ctx.beginPath();
+    ctx.arc(x + s/2, y + s/2, radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 绘制边框
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    
+    // 绘制内部细节
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('KICK', x + s/2, y + s/2);
+    
+    // 绘制血量指示
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`${entity.hp}/${LEVELS[game.currentLevelIdx].config.chainMaxHP}`, x + s/2, y + s/2 + 18);
+    
+    // 绘制锁链连接点
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(x + s/2, y + s/2 - radius * 0.7, s * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+}
+
+// --- 事件监听 ---
+window.addEventListener('resize', ()=>{ resize(); });
+document.getElementById('btn-restart-ui').onclick=()=>{
+    if (audioManager && audioManager.playButtonClickSound) {
+        audioManager.playButtonClickSound();
+    }
+    showModal('restart');
+};
+document.getElementById('btn-levels-ui').onclick=()=>{
+    if (audioManager && audioManager.playMenuOpenSound) {
+        audioManager.playMenuOpenSound();
+    }
+    showModal('levels');
+};
+document.getElementById('btn-cancel').onclick=()=>{
+    if (audioManager && audioManager.playButtonClickSound) {
+        audioManager.playButtonClickSound();
+    }
+    hideModals();
+};
+document.getElementById('btn-cancel-levels').onclick=()=>{
+    if (audioManager && audioManager.playMenuCloseSound) {
+        audioManager.playMenuCloseSound();
+    }
+    hideModals();
+};
+document.getElementById('btn-confirm').onclick=()=>{
+    if (audioManager && audioManager.playButtonClickSound) {
+        audioManager.playButtonClickSound();
+    }
+    resetGame();
+};
+
+// 按钮悬停效果
+document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+        if (audioManager && audioManager.playButtonHoverSound) {
+            audioManager.playButtonHoverSound();
+        }
+    });
+});
+
+let tsx=0,tsy=0;
+canvas.addEventListener('touchstart',e=>{ tsx=e.touches[0].clientX; tsy=e.touches[0].clientY; e.preventDefault(); }, {passive:false});
+canvas.addEventListener('touchend',e=>{
+    let dx=e.changedTouches[0].clientX-tsx, dy=e.changedTouches[0].clientY-tsy;
+    if(Math.abs(dx)>Math.abs(dy)) handleInput(dx>0?1:-1,0); else handleInput(0,dy>0?1:-1);
+});
+window.addEventListener('keydown',e=>{
+    if(e.repeat) return; const k=e.key.toLowerCase();
+    
+    // 阻止方向键滚动页面
+    if(['arrowup','arrowdown','arrowleft','arrowright'].includes(k)) e.preventDefault();
+
+    const modals=document.querySelectorAll('.modal-overlay');
+    let modalOpen=false; modals.forEach(m=>{if(m.style.display==='flex')modalOpen=true;});
+    if(modalOpen) {
+        if(k==='enter') {
+            if (audioManager && audioManager.playButtonClickSound) {
+                audioManager.playButtonClickSound();
+            }
+            if(document.getElementById('modal-restart').style.display==='flex') resetGame();
+            else if(document.getElementById('modal-dialogue').style.display==='flex') document.getElementById('btn-next').click();
+        }
+        if(k==='escape') {
+            if (audioManager && audioManager.playMenuCloseSound) {
+                audioManager.playMenuCloseSound();
+            }
+            hideModals();
+        }
+        return;
+    }
+    if(k==='r') {
+        if (audioManager && audioManager.playButtonClickSound) {
+            audioManager.playButtonClickSound();
+        }
+        showModal('restart');
+    }
+    if(k==='w'||k==='arrowup') handleInput(0,-1);
+    else if(k==='s'||k==='arrowdown') handleInput(0,1);
+    else if(k==='a'||k==='arrowleft') handleInput(-1,0);
+    else if(k==='d'||k==='arrowright') handleInput(1,0);
+});
+
+// 启动游戏
+init();
+</script>
+</body>
+</html>
