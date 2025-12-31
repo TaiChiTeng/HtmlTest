@@ -250,6 +250,8 @@
  * 2. 保留所有音效 (SFX)
  * 3. 优化了第十关链球目标表现
  * 4. 优化了第十关地图上下滚动地刺表现
+ * 5. 添加了第11关BOSS II，支持水平链条和无限循环链条
+ * 6. 第11关无限循环模式暂停滚动，并显示可配置位置的链球目标
  */
 
 // --- 数据 ---
@@ -277,6 +279,30 @@ const LEVELS = [
                 {t:23,v:[3]},{t:24,v:[0,6]},{t:25,v:[2,4]},{t:26,v:[1,5]},{t:27,v:[0,3,6]}
             ]
         }
+    },
+    {
+        type: 'BOSS II',
+        title: "LEVEL XI", demonName: "Judgement", demonLine: "IGNITE THE SIN MACHINE II!",
+        config: {
+            cols: 7, rows: 7, heroStart: {r:3,c:3}, maxHP: 4, bossHP: 2, chainMaxHP: 5,
+            scrollDelay: 2.5, scrollTime: 1.5, phaseTime: 27.5,
+            // 链球目标配置：坐标(r,c)，r为行(0-6)，c为列(0-6)
+            chainTargets: [
+                {r:2, c:-1},  // 左目标，稍微超出左边界
+                {r:4, c:8}    // 右目标，稍微超出右边界
+            ],
+            chains: [
+                {t:6,v:[0,3,6]},{t:7,v:[2,4]},{t:8,v:[3]},{t:9,v:[1,5]},{t:10,v:[0,3,6]},
+                {t:12,h:[1]},{t:12.5,h:[3]},{t:13,h:[1,5]},{t:13.5,h:[3]},{t:14,h:[5]},
+                {t:15,v:[0,6]},{t:15.75,v:[1,5]},{t:16.5,v:[3]},
+                {t:17,v:[2,4]},{t:18,v:[0,2,4,6]},{t:19,v:[3]},{t:20,v:[2,3,4]},{t:20.5,v:[0,2,4,6]},
+                {t:21.5,v:[1,3,5]},{t:22.5,v:[0,6]},{t:23.5,v:[2,4]},{t:24.5,v:[1,3,5]},{t:25.5,v:[0,6]},
+                {t:24.5,v:[1,2,3,5,6]},{t:25.5,v:[2,4]},{t:26.5,v:[1,3,5]},{t:27.5,v:[0,3,6]}
+            ],
+            chainsLoop: [
+                {t:1,v:[0,6]},{t:2,v:[1,5]},{t:3,v:[1,5]},{t:4,v:[2,4]}
+            ]
+        }
     }
 ];
 
@@ -286,7 +312,8 @@ const PALETTE = {
     bone:'#e0e0e0',rock:'#e3e3e3',spike:'#555',spikeActive:'#a00',key:'#ffd700',lock:'#888',
     chain:'#fff',chainWarn:'rgba(255,255,255,0.3)',shadow:'rgba(0,0,0,0.4)',
     chainTarget:'#00ccff',chainTargetGlow:'#00ffff',chainTargetDamage:'#ff3300',
-    scrollIndicator: 'rgba(255, 0, 68, 0.6)'
+    scrollIndicator: 'rgba(255, 0, 68, 0.6)',
+    horizontalChain: '#ff3366'  // 新增：水平链条颜色
 };
 
 // ============================================
@@ -750,6 +777,12 @@ class AudioManager {
         this.generateWave('square', 100, 0.05, 0.2);
     }
     
+    // 新增：水平链条音效
+    playHorizontalChainSound() {
+        this.generateWave('sawtooth', 180, 0.25, 0.4);
+        this.generateNoise(0.1, 0.3);
+    }
+    
     // =============== 背景音乐系统 (已屏蔽) ===============
     playMusic(type) {
         return; // 直接返回，不播放任何BGM
@@ -805,7 +838,14 @@ let game = {
     chainTargetsVisible: false,
     // 新增：滚动状态
     scrollWarningActive: false,
-    lastScrollTick: 0
+    lastScrollTick: 0,
+    // 新增：BOSS II关卡特定状态
+    loopChainsActive: false,
+    loopPhaseStartTime: 0,
+    loopCycleTime: 0,
+    currentLoopCycle: 0,
+    // 新增：暂停滚动标志
+    scrollPaused: false
 };
 
 // --- 缓动函数 ---
@@ -858,7 +898,8 @@ function showDamageNumber(x, y, damage) {
 
 // 新增：更新滚动指示器
 function updateScrollIndicator(progress) {
-    if (LEVELS[game.currentLevelIdx].type === 'BOSS' && game.bossPhase === 1) {
+    const lvl = LEVELS[game.currentLevelIdx];
+    if ((lvl.type === 'BOSS' || lvl.type === 'BOSS II') && game.bossPhase === 1 && !game.scrollPaused) {
         scrollIndicator.style.display = 'block';
         scrollProgress.style.width = `${progress * 100}%`;
     } else {
@@ -896,14 +937,19 @@ function showModal(type, title, text, btnText) {
 }
 
 function updateUI() {
-    if(LEVELS[game.currentLevelIdx].type==='BOSS') {
+    const lvl = LEVELS[game.currentLevelIdx];
+    if(lvl.type==='BOSS' || lvl.type==='BOSS II') {
         uiStat.innerHTML=`HP: <span class="highlight">${game.hp}</span>`;
-        elInfoInd.innerHTML = game.bossPhase===0?'PREPARE...':(game.bossPhase===1?'SURVIVE!':'DESTROY!');
+        if (game.loopChainsActive) {
+            elInfoInd.innerHTML = 'INFINITE LOOP!';
+        } else {
+            elInfoInd.innerHTML = game.bossPhase===0?'PREPARE...':(game.bossPhase===1?'SURVIVE!':'DESTROY!');
+        }
         elInfoInd.classList.add('visible');
         
         // 更新BOSS心跳速率
         if (audioManager && audioManager.updateBossHeartbeatRate) {
-            audioManager.updateBossHeartbeatRate(game.hp, LEVELS[game.currentLevelIdx].config.maxHP);
+            audioManager.updateBossHeartbeatRate(game.hp, lvl.config.maxHP);
         }
     } else {
         uiStat.innerHTML=`WILL: <span class="highlight" style="${game.moves<=5?'color:red':''}">${game.moves}</span>`;
@@ -983,6 +1029,21 @@ function spawnChainTargetDestroy(x, y) {
             life: 1.5,
             size: Math.random() * 4 + 2,
             type: 'debris'
+        });
+    }
+}
+
+// 新增：水平链条粒子效果
+function spawnHorizontalChainParticles(row) {
+    for(let i=0;i<20;i++) {
+        game.particles.push({
+            x: Math.random() * 7, y: row + 0.5,
+            vx: (Math.random()-0.5)*0.1,
+            vy: (Math.random()-0.5)*0.05,
+            color: PALETTE.horizontalChain,
+            life: 0.8,
+            size: Math.random() * 2 + 1,
+            type: 'spark'
         });
     }
 }
@@ -1069,6 +1130,11 @@ function loadLevel(idx) {
     game.chainTargetsVisible = false;
     game.scrollWarningActive = false;
     game.lastScrollTick = 0;
+    game.loopChainsActive = false;
+    game.loopPhaseStartTime = 0;
+    game.loopCycleTime = 0;
+    game.currentLoopCycle = 0;
+    game.scrollPaused = false;
     
     // 播放关卡切换音效
     if (audioManager && audioManager.playButtonClickSound) {
@@ -1077,7 +1143,7 @@ function loadLevel(idx) {
     
     // 播放对应的背景音乐
     if (audioManager && audioManager.playMusic) {
-        if (lvl.type === 'BOSS') {
+        if (lvl.type === 'BOSS' || lvl.type === 'BOSS II') {
             audioManager.playMusic('boss');
         } else {
             audioManager.playMusic('level');
@@ -1123,7 +1189,8 @@ function loop(timestamp) {
     let dt = (timestamp - game.lastTime)/1000; if(dt>0.1) dt=0.1;
     game.lastTime = timestamp;
     if(game.state==='PLAYING') {
-        if(LEVELS[game.currentLevelIdx].type==='BOSS') updateBoss(dt);
+        const lvl = LEVELS[game.currentLevelIdx];
+        if(lvl.type==='BOSS' || lvl.type==='BOSS II') updateBoss(dt);
         else updatePuzzle(dt);
     }
     draw(); window.requestAnimationFrame(loop);
@@ -1141,7 +1208,8 @@ function updatePuzzle(dt) {
 }
 
 function updateBoss(dt) {
-    const conf = LEVELS[game.currentLevelIdx].config;
+    const lvl = LEVELS[game.currentLevelIdx];
+    const conf = lvl.config;
     game.bossTime += dt;
     game.beat = (game.bossTime*2.5)%1;
     if(game.invuln>0) game.invuln-=dt;
@@ -1169,113 +1237,190 @@ function updateBoss(dt) {
     }
 
     if(game.bossPhase===1) {
-        const oldTimer = game.scrollTimer;
-        game.scrollTimer += dt;
-        
-        // 更新滚动指示器
-        updateScrollIndicator(game.scrollTimer / 2.0);
-        
-        // 滚动警告效果
-        if (game.scrollTimer > 1.5 && game.scrollTimer < 2.0) {
-            if (!game.scrollWarningActive) {
-                game.scrollWarningActive = true;
-                // 播放滚动警告音效
-                if (audioManager && audioManager.playScrollWarningSound) {
-                    audioManager.playScrollWarningSound();
+        // 如果滚动已暂停，则不更新滚动计时器
+        if (!game.scrollPaused) {
+            const oldTimer = game.scrollTimer;
+            game.scrollTimer += dt;
+            
+            // 更新滚动指示器
+            updateScrollIndicator(game.scrollTimer / 2.0);
+            
+            // 滚动警告效果
+            if (game.scrollTimer > 1.5 && game.scrollTimer < 2.0) {
+                if (!game.scrollWarningActive) {
+                    game.scrollWarningActive = true;
+                    // 播放滚动警告音效
+                    if (audioManager && audioManager.playScrollWarningSound) {
+                        audioManager.playScrollWarningSound();
+                    }
+                }
+                
+                // 生成预警粒子
+                if (Math.random() < 0.3) {
+                    spawnScrollWarningParticles();
+                }
+            } else {
+                game.scrollWarningActive = false;
+            }
+            
+            // 滚动滴答声
+            if (game.scrollTimer > 0.5 && Math.floor(game.scrollTimer * 4) !== Math.floor(game.lastScrollTick * 4)) {
+                if (audioManager && audioManager.playScrollTickSound) {
+                    audioManager.playScrollTickSound();
+                }
+                game.lastScrollTick = game.scrollTimer;
+            }
+            
+            // 滚动开始时生成粒子效果
+            if (Math.floor(oldTimer / 2.0) !== Math.floor(game.scrollTimer / 2.0)) {
+                // 播放滚动开始音效
+                if (audioManager && audioManager.playScrollStartSound) {
+                    audioManager.playScrollStartSound();
+                }
+                
+                for(let c=0; c<7; c++) {
+                    spawnSpikeParticles(c, 6);
+                    spawnParticle(c, 6.5, PALETTE.bone);
                 }
             }
             
-            // 生成预警粒子
-            if (Math.random() < 0.3) {
-                spawnScrollWarningParticles();
+            if (game.scrollTimer >= 2.0) {
+                game.scrollTimer -= 2.0;
+                game.player.y -= 1; 
+                game.player.vy -= 1;
+                if (game.player.y < 0) takeDamage();
             }
-        } else {
-            game.scrollWarningActive = false;
-        }
-        
-        // 滚动滴答声
-        if (game.scrollTimer > 0.5 && Math.floor(game.scrollTimer * 4) !== Math.floor(game.lastScrollTick * 4)) {
-            if (audioManager && audioManager.playScrollTickSound) {
-                audioManager.playScrollTickSound();
-            }
-            game.lastScrollTick = game.scrollTimer;
-        }
-        
-        // 滚动开始时生成粒子效果
-        if (Math.floor(oldTimer / 2.0) !== Math.floor(game.scrollTimer / 2.0)) {
-            // 播放滚动开始音效
-            if (audioManager && audioManager.playScrollStartSound) {
-                audioManager.playScrollStartSound();
-            }
-            
-            for(let c=0; c<7; c++) {
-                spawnSpikeParticles(c, 6);
-                spawnParticle(c, 6.5, PALETTE.bone);
-            }
-        }
-        
-        if (game.scrollTimer >= 2.0) {
-            game.scrollTimer -= 2.0;
-            game.player.y -= 1; 
-            game.player.vy -= 1;
-            if (game.player.y < 0) takeDamage();
         }
 
         if(game.player.y < 0 || game.player.y > 6) takeDamage();
 
-        conf.chains.forEach(evt => {
-            if(game.bossTime >= evt.t && game.bossTime < evt.t + 0.75) {
-                if(!game.activeChains.find(c=>c.t===evt.t)) {
-                    game.activeChains.push({t:evt.t, v:evt.v, state:'WARN', timer:0});
+        // 处理链条事件
+        let currentChains = conf.chains;
+        let currentTime = game.bossTime;
+        
+        // 检查是否需要激活无限循环链条
+        if (conf.chainsLoop && game.bossTime >= conf.phaseTime && !game.loopChainsActive) {
+            game.loopChainsActive = true;
+            game.loopPhaseStartTime = game.bossTime;
+            // 暂停滚动
+            game.scrollPaused = true;
+            game.scrollWarningActive = false;
+            scrollIndicator.style.display = 'none';
+            
+            // 计算循环周期（使用chainsLoop中最大时间+0.5）
+            let maxTime = 0;
+            conf.chainsLoop.forEach(evt => { if (evt.t > maxTime) maxTime = evt.t; });
+            game.loopCycleTime = maxTime + 0.5;
+            
+            // 创建链球目标（使用配置的位置）
+            if (conf.chainTargets && conf.chainTargets.length > 0) {
+                // 清除可能已存在的链球目标
+                game.entities = game.entities.filter(e => e.type !== 'chain_target');
+                
+                // 创建新的链球目标
+                conf.chainTargets.forEach(targetPos => {
+                    // 确保坐标在有效范围内（0-6）
+                    const x = Math.max(0, Math.min(6, targetPos.c));
+                    const y = Math.max(0, Math.min(6, targetPos.r));
+                    
+                    let target = createEntity(x, y, 'chain_target');
+                    target.hp = conf.chainMaxHP;
+                    target.pulse = 0;
+                    target.hitFlash = 0;
+                    target.shake = 0;
+                    game.entities.push(target);
+                });
+                
+                // 显示BOSS血条
+                elBossHP.style.display='block';
+                let totalHP = game.entities.filter(e=>e.type==='chain_target').reduce((s,c)=>s+c.hp,0);
+                elBossHPFill.style.width = (totalHP/(conf.chainMaxHP*conf.chainTargets.length)*100)+'%';
+            }
+        }
+        
+        if (game.loopChainsActive) {
+            currentChains = conf.chainsLoop;
+            currentTime = (game.bossTime - game.loopPhaseStartTime) % game.loopCycleTime;
+            game.currentLoopCycle = Math.floor((game.bossTime - game.loopPhaseStartTime) / game.loopCycleTime);
+        }
+        
+        currentChains.forEach(evt => {
+            const eventTime = evt.t;
+            const loopOffset = game.currentLoopCycle * 1000; // 为每个循环生成唯一标识
+            const uniqueId = evt.t + loopOffset;
+            
+            if(currentTime >= eventTime && currentTime < eventTime + 0.75) {
+                if(!game.activeChains.find(c=>c.uniqueId === uniqueId)) {
+                    // 确定链条类型（垂直或水平）
+                    let dir = 'v';
+                    let pos = evt.v;
+                    if (evt.h !== undefined) {
+                        dir = 'h';
+                        pos = evt.h;
+                    }
+                    
+                    game.activeChains.push({
+                        uniqueId: uniqueId,
+                        t: eventTime,
+                        dir: dir,
+                        pos: pos,
+                        state: 'WARN',
+                        timer: 0
+                    });
+                    
                     // 播放链条警告音效
                     if (audioManager && audioManager.playChainWarningSound) {
                         audioManager.playChainWarningSound();
                     }
+                    
+                    // 如果是水平链条，播放特殊音效
+                    if (dir === 'h' && audioManager && audioManager.playHorizontalChainSound) {
+                        audioManager.playHorizontalChainSound();
+                    }
                 }
             }
         });
+        
+        // 更新活动链条
         game.activeChains.forEach(c => {
             c.timer += dt;
             if(c.state==='WARN' && c.timer >= 0.75) {
-                c.state = 'HIT'; screenShake(5);
-                c.v.forEach(col => { if(Math.abs(game.player.x - col) < 0.6) takeDamage(); });
+                c.state = 'HIT'; 
+                screenShake(5);
+                
+                // 检查玩家是否被击中
+                if (c.dir === 'v') {
+                    // 垂直链条
+                    c.pos.forEach(col => { 
+                        if(Math.abs(game.player.x - col) < 0.6) takeDamage(); 
+                    });
+                } else if (c.dir === 'h') {
+                    // 水平链条
+                    c.pos.forEach(row => {
+                        if(Math.abs(game.player.y - row) < 0.6) takeDamage();
+                    });
+                }
                 
                 // 播放链条攻击音效
                 if (audioManager && audioManager.playChainAttackSound) {
                     audioManager.playChainAttackSound();
                 }
+                
+                // 生成水平链条粒子效果
+                if (c.dir === 'h') {
+                    c.pos.forEach(row => {
+                        spawnHorizontalChainParticles(row);
+                    });
+                }
             }
             if(c.timer >= 1.0) c.done=true;
         });
         game.activeChains = game.activeChains.filter(c=>!c.done);
-
-        if(game.bossTime >= conf.phaseTime) {
-            game.bossPhase = 2;
-            game.player.y = Math.round(game.player.y); game.player.x = Math.round(game.player.x);
-            
-            // 创建链球目标，添加额外属性
-            let leftTarget = createEntity(0,3,'chain_target');
-            leftTarget.hp = conf.chainMaxHP;
-            leftTarget.pulse = 0;
-            leftTarget.hitFlash = 0;
-            leftTarget.shake = 0;
-            game.entities.push(leftTarget);
-            
-            let rightTarget = createEntity(6,3,'chain_target');
-            rightTarget.hp = conf.chainMaxHP;
-            rightTarget.pulse = 0;
-            rightTarget.hitFlash = 0;
-            rightTarget.shake = 0;
-            game.entities.push(rightTarget);
-            
-            elBossHP.style.display='block';
-            scrollIndicator.style.display = 'none';
-        }
     }
 
     game.player.vx += (game.player.x - game.player.vx)*0.5;
     
-    if(game.bossPhase===1) {
+    if(game.bossPhase===1 && !game.scrollPaused) {
         let visualOffset = 0;
         if (game.scrollTimer > 0.5) {
             const scrollPhase = (game.scrollTimer - 0.5) / 1.5;
@@ -1317,7 +1462,8 @@ function takeDamage() {
 // --- 输入处理 ---
 function handleInput(dx, dy) {
     if(game.state!=='PLAYING' || game.inputLocked) return;
-    if(LEVELS[game.currentLevelIdx].type==='BOSS') handleBossInput(dx,dy);
+    const lvl = LEVELS[game.currentLevelIdx];
+    if(lvl.type==='BOSS' || lvl.type==='BOSS II') handleBossInput(dx,dy);
     else handlePuzzleInput(dx,dy);
 }
 
@@ -1326,7 +1472,11 @@ function handleBossInput(dx, dy) {
     let tx = Math.round(game.player.x)+dx; let ty = Math.round(game.player.y)+dy;
     if(tx<0||tx>6||ty<0||ty>6) return;
 
-    if(game.bossPhase===2) {
+    const lvl = LEVELS[game.currentLevelIdx];
+    const conf = lvl.config;
+    
+    // 检查是否可以攻击链球目标（在无限循环模式或BOSS第二阶段）
+    if(game.loopChainsActive || game.bossPhase===2) {
         let chains = game.entities.filter(e=>e.type==='chain_target');
         let hit = chains.find(c=>c.x===tx && c.y===ty);
         if(hit) {
@@ -1368,8 +1518,11 @@ function handleBossInput(dx, dy) {
                 spawnChainTargetDestroy(tx, ty);
                 game.entities=game.entities.filter(e=>!e.dead); 
             }
+            
+            // 更新BOSS血条
             let totalHP = game.entities.filter(e=>e.type==='chain_target').reduce((s,c)=>s+c.hp,0);
-            elBossHPFill.style.width = (totalHP/10*100)+'%';
+            let maxTotalHP = conf.chainMaxHP * (conf.chainTargets ? conf.chainTargets.length : 2);
+            elBossHPFill.style.width = (totalHP/maxTotalHP*100)+'%';
             
             // 播放BOSS受伤音效
             if (audioManager && audioManager.playBossDamageSound) {
@@ -1570,7 +1723,8 @@ function checkWin() {
 // --- 绘制函数 ---
 function draw() {
     ctx.fillStyle = PALETTE.void; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if(LEVELS[game.currentLevelIdx].type==='BOSS') drawBossScene();
+    const lvl = LEVELS[game.currentLevelIdx];
+    if(lvl.type==='BOSS' || lvl.type==='BOSS II') drawBossScene();
     else drawPuzzleScene();
 }
 
@@ -1583,7 +1737,7 @@ function drawBossScene() {
     let visualOffset = 0;
     let extraRow1Offset=0, extraRow2Offset=0, topSpikeAlpha=1, bottomSpikeAlpha=0;
     
-    if(game.bossPhase===1) {
+    if(game.bossPhase===1 && !game.scrollPaused) {
         const progress = game.scrollTimer / 2.0; 
         const easedProgress = easeInOutQuad(progress);
         
@@ -1647,14 +1801,24 @@ function drawBossScene() {
 
     // 绘制链条（跟随滚动）
     game.activeChains.forEach(c => {
-        ctx.fillStyle = c.state==='WARN' ? PALETTE.chainWarn : PALETTE.chain;
-        c.v.forEach(col => {
-            const y = visualOffset * TS;
-            ctx.fillRect(col*TS + TS*0.2, y, TS*0.6, 7*TS);
-        });
+        if (c.dir === 'v') {
+            // 垂直链条
+            ctx.fillStyle = c.state==='WARN' ? PALETTE.chainWarn : PALETTE.chain;
+            c.pos.forEach(col => {
+                const y = visualOffset * TS;
+                ctx.fillRect(col*TS + TS*0.2, y, TS*0.6, 7*TS);
+            });
+        } else if (c.dir === 'h') {
+            // 水平链条
+            ctx.fillStyle = c.state==='WARN' ? PALETTE.horizontalChain + '80' : PALETTE.horizontalChain;
+            c.pos.forEach(row => {
+                const y = (row + visualOffset) * TS;
+                ctx.fillRect(0, y + TS*0.2, 7*TS, TS*0.6);
+            });
+        }
     });
 
-    // 绘制BOSS第二阶段链球目标
+    // 绘制链球目标（包括无限循环模式中的目标）
     game.entities.forEach(e => {
         if (e.type === 'chain_target') {
             drawChainTarget(ctx, e, e.vx*TS, (e.y + visualOffset)*TS, TS);
@@ -1835,7 +1999,8 @@ function drawChainTarget(ctx, entity, x, y, s) {
     
     // 绘制血量指示
     ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(`${entity.hp}/${LEVELS[game.currentLevelIdx].config.chainMaxHP}`, x + s/2, y + s/2 + 18);
+    const lvl = LEVELS[game.currentLevelIdx];
+    ctx.fillText(`${entity.hp}/${lvl.config.chainMaxHP}`, x + s/2, y + s/2 + 18);
     
     // 绘制锁链连接点
     ctx.fillStyle = '#000';
