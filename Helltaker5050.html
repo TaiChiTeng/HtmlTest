@@ -252,9 +252,10 @@
  * 4. 优化了第十关地图上下滚动地刺表现
  * 5. 添加了第11关BOSS II，支持水平链条和无限循环链条
  * 6. 第11关无限循环模式暂停滚动，并显示可配置位置的链球目标
+ * 7. 修复了第12关无法游戏的问题，添加了BOSS III类型判断
  */
 
-// --- 数据 ---
+// --- 关卡数据 ---
 const LEVELS = [
     {type:'PUZZLE',title:"LEVEL I",demonName:"Pandemonica",demonLine:"Coffee? I hope you brought some.",map:["888888888","888880088","880000088","880000888","800888888","800000088","800000008","888888888"],config:{cols:9,rows:8,maxMoves:23,heroStart:{r:6,c:6},girls:[{r:1,c:7}],rocks:[{r:1,c:2},{r:1,c:4},{r:2,c:2},{r:2,c:5}],mobs:[{r:4,c:3},{r:4,c:5},{r:5,c:4}],spikes:[],toggleSpikes:[],keys:[],locks:[]}},
     {type:'PUZZLE',title:"LEVEL II",demonName:"Modeus",demonLine:"You seem lost.",map:["888888888","880000888","880800008","800880008","800880008","800880008","888880008","888888888"],config:{cols:9,rows:8,maxMoves:24,heroStart:{r:2,c:1},girls:[{r:1,c:5}],rocks:[{r:4,c:5},{r:4,c:6},{r:4,c:7}],mobs:[{r:1,c:7},{r:2,c:6},{r:5,c:2}],spikes:[{r:3,c:6},{r:4,c:5},{r:4,c:6},{r:5,c:4},{r:5,c:5},{r:4,c:2}],toggleSpikes:[],keys:[],locks:[]}},
@@ -269,15 +270,20 @@ const LEVELS = [
         type: 'BOSS',
         title: "LEVEL X", demonName: "Judgement", demonLine: "IGNITE THE SIN MACHINE!",
         config: {
-            cols: 7, rows: 7, heroStart: {r:3,c:3}, maxHP: 5, bossHP: 2, chainMaxHP: 5,
+            cols: 7, rows: 7, heroStart: {r:3,c:3}, maxHP: 4, bossHP: 2, chainMaxHP: 5,
             scrollDelay: 3.0, scrollTime: 1.5, phaseTime: 28.0,
+            chainTargets: [
+                {r:3, c:0},  // 左目标
+                {r:3, c:6}    // 右目标
+            ],
             chains: [
                 {t:6,v:[0]},{t:7,v:[1]},{t:8,v:[2]},{t:9,v:[3]},{t:10,v:[4]},
                 {t:12,v:[6]},{t:12.5,v:[5]},{t:13,v:[4]},{t:13.5,v:[3]},{t:14,v:[2]},
                 {t:15,v:[0]},{t:16,v:[2]},{t:17,v:[4]},
                 {t:18,v:[1,6]},{t:19,v:[0,3]},{t:19.5,v:[2,5]},{t:20,v:[4]},{t:21,v:[6]},
                 {t:23,v:[3]},{t:24,v:[0,6]},{t:25,v:[2,4]},{t:26,v:[1,5]},{t:27,v:[0,3,6]}
-            ]
+            ],
+            chainsLoop: []  // 第一次不用无限循环链条攻击，让玩家安全地摸索，自行发现要攻击链球目标
         }
     },
     {
@@ -285,11 +291,11 @@ const LEVELS = [
         title: "LEVEL XI", demonName: "Judgement", demonLine: "IGNITE THE SIN MACHINE II!",
         config: {
             cols: 7, rows: 7, heroStart: {r:3,c:3}, maxHP: 4, bossHP: 2, chainMaxHP: 5,
-            scrollDelay: 2.5, scrollTime: 1.5, phaseTime: 27.5,
+            scrollDelay: 2.5, scrollTime: 1.5, phaseTime: 28.5,
             // 链球目标配置：坐标(r,c)，r为行(0-6)，c为列(0-6)
             chainTargets: [
-                {r:2, c:-1},  // 左目标，稍微超出左边界
-                {r:4, c:8}    // 右目标，稍微超出右边界
+                {r:2, c:0},  // 左目标
+                {r:4, c:6}    // 右目标
             ],
             chains: [
                 {t:6,v:[0,3,6]},{t:7,v:[2,4]},{t:8,v:[3]},{t:9,v:[1,5]},{t:10,v:[0,3,6]},
@@ -301,6 +307,29 @@ const LEVELS = [
             ],
             chainsLoop: [
                 {t:1,v:[0,6]},{t:2,v:[1,5]},{t:3,v:[1,5]},{t:4,v:[2,4]}
+            ]
+        }
+    },
+    {
+        type: 'BOSS III',
+        title: "LEVEL XII", demonName: "Judgement", demonLine: "IGNITE THE SIN MACHINE III!",
+        config: {
+            cols: 7, rows: 7, heroStart: {r:3,c:3}, maxHP: 4, bossHP: 2, chainMaxHP: 5,
+            scrollDelay: 2.5, scrollTime: 1.5, phaseTime: 23,
+            // 链球目标配置：坐标(r,c)，r为行(0-6)，c为列(0-6)
+            chainTargets: [
+                {r:4, c:0},  // 左目标
+                {r:2, c:6}    // 右目标
+            ],
+            chains: [
+                {t:6,v:[3]},{t:7,v:[2,4]},{t:8,v:[1,5]},{t:9,v:[0,6]},{t:10,h:[1]},{t:11,h:[3]},
+                {t:11.5,v:[0,6]},{t:12.5,h:[5]},{t:13,h:[1,5]},{t:13.5,h:[2]},{t:14,v:[2,4]},{t:14.5,h:[4]},
+                {t:15,v:[3]},{t:15.75,v:[0,3,6]},{t:16.5,v:[1,2,4,5]},
+                {t:17,h:[3]},{t:17.5,v:[0,6]},{t:18,v:[3],h:[1,5]},{t:18.5,v:[2,4]},{t:19,v:[0,6],h:[4]},
+                {t:19.5,v:[1,5]},{t:20,v:[3],h:[2]},{t:20.5,v:[2,3,4]},{t:21,v:[1,2,3,4,5]},{t:22,v:[0,6]}
+            ],
+            chainsLoop: [
+                {t:1,v:[0,1,5,6]},{t:2,v:[0,1],h:[5]},{t:3,h:[1,5]},{t:4,v:[5,6],h:[1]},{t:5,v:[0,6]}
             ]
         }
     }
@@ -315,6 +344,11 @@ const PALETTE = {
     scrollIndicator: 'rgba(255, 0, 68, 0.6)',
     horizontalChain: '#ff3366'  // 新增：水平链条颜色
 };
+
+// 辅助函数：判断是否是BOSS关卡
+function isBossLevel(type) {
+    return type === 'BOSS' || type === 'BOSS II' || type === 'BOSS III';
+}
 
 // ============================================
 // 音频管理器 - 程序化音频生成
@@ -899,7 +933,7 @@ function showDamageNumber(x, y, damage) {
 // 新增：更新滚动指示器
 function updateScrollIndicator(progress) {
     const lvl = LEVELS[game.currentLevelIdx];
-    if ((lvl.type === 'BOSS' || lvl.type === 'BOSS II') && game.bossPhase === 1 && !game.scrollPaused) {
+    if (isBossLevel(lvl.type) && game.bossPhase === 1 && !game.scrollPaused) {
         scrollIndicator.style.display = 'block';
         scrollProgress.style.width = `${progress * 100}%`;
     } else {
@@ -938,10 +972,10 @@ function showModal(type, title, text, btnText) {
 
 function updateUI() {
     const lvl = LEVELS[game.currentLevelIdx];
-    if(lvl.type==='BOSS' || lvl.type==='BOSS II') {
+    if(isBossLevel(lvl.type)) {
         uiStat.innerHTML=`HP: <span class="highlight">${game.hp}</span>`;
         if (game.loopChainsActive) {
-            elInfoInd.innerHTML = 'INFINITE LOOP!';
+            elInfoInd.innerHTML = 'ATTACK TARGETS!';
         } else {
             elInfoInd.innerHTML = game.bossPhase===0?'PREPARE...':(game.bossPhase===1?'SURVIVE!':'DESTROY!');
         }
@@ -1143,7 +1177,7 @@ function loadLevel(idx) {
     
     // 播放对应的背景音乐
     if (audioManager && audioManager.playMusic) {
-        if (lvl.type === 'BOSS' || lvl.type === 'BOSS II') {
+        if (isBossLevel(lvl.type)) {
             audioManager.playMusic('boss');
         } else {
             audioManager.playMusic('level');
@@ -1190,7 +1224,7 @@ function loop(timestamp) {
     game.lastTime = timestamp;
     if(game.state==='PLAYING') {
         const lvl = LEVELS[game.currentLevelIdx];
-        if(lvl.type==='BOSS' || lvl.type==='BOSS II') updateBoss(dt);
+        if(isBossLevel(lvl.type)) updateBoss(dt);
         else updatePuzzle(dt);
     }
     draw(); window.requestAnimationFrame(loop);
@@ -1298,8 +1332,10 @@ function updateBoss(dt) {
         let currentChains = conf.chains;
         let currentTime = game.bossTime;
         
-        // 检查是否需要激活无限循环链条
-        if (conf.chainsLoop && game.bossTime >= conf.phaseTime && !game.loopChainsActive) {
+        // 检查是否需要激活无限循环链条（修复：第10关也要在phaseTime后显示链球目标）
+        // 原条件：if (conf.chainsLoop && game.bossTime >= conf.phaseTime && !game.loopChainsActive) {
+        // 改为：即使chainsLoop为空，也要在phaseTime后进入loop模式以显示链球目标
+        if (game.bossTime >= conf.phaseTime && !game.loopChainsActive) {
             game.loopChainsActive = true;
             game.loopPhaseStartTime = game.bossTime;
             // 暂停滚动
@@ -1307,12 +1343,17 @@ function updateBoss(dt) {
             game.scrollWarningActive = false;
             scrollIndicator.style.display = 'none';
             
-            // 计算循环周期（使用chainsLoop中最大时间+0.5）
+            // 计算循环周期（使用chainsLoop中最大时间+0.5，如果为空则设为0）
             let maxTime = 0;
-            conf.chainsLoop.forEach(evt => { if (evt.t > maxTime) maxTime = evt.t; });
-            game.loopCycleTime = maxTime + 0.5;
-            
-            // 创建链球目标（使用配置的位置）
+            if (conf.chainsLoop && conf.chainsLoop.length > 0) {
+                conf.chainsLoop.forEach(evt => { if (evt.t > maxTime) maxTime = evt.t; });
+                game.loopCycleTime = maxTime + 0.5;
+            } else {
+                // 如果chainsLoop为空，设置一个很大的循环周期，这样就不会触发新的链条
+                game.loopCycleTime = 999999;
+            }
+
+            // 创建链球目标（使用配置的位置） - 第10关和第11关都适用
             if (conf.chainTargets && conf.chainTargets.length > 0) {
                 // 清除可能已存在的链球目标
                 game.entities = game.entities.filter(e => e.type !== 'chain_target');
@@ -1339,9 +1380,15 @@ function updateBoss(dt) {
         }
         
         if (game.loopChainsActive) {
-            currentChains = conf.chainsLoop;
-            currentTime = (game.bossTime - game.loopPhaseStartTime) % game.loopCycleTime;
-            game.currentLoopCycle = Math.floor((game.bossTime - game.loopPhaseStartTime) / game.loopCycleTime);
+            // 只有在chainsLoop不为空时才使用循环链条
+            if (conf.chainsLoop && conf.chainsLoop.length > 0) {
+                currentChains = conf.chainsLoop;
+                currentTime = (game.bossTime - game.loopPhaseStartTime) % game.loopCycleTime;
+                game.currentLoopCycle = Math.floor((game.bossTime - game.loopPhaseStartTime) / game.loopCycleTime);
+            } else {
+                // 第10关的情况：没有循环链条，只显示链球目标
+                currentChains = [];
+            }
         }
         
         currentChains.forEach(evt => {
@@ -1402,68 +1449,68 @@ function updateBoss(dt) {
                 }
                 
                 // 播放链条攻击音效
-                if (audioManager && audioManager.playChainAttackSound) {
-                    audioManager.playChainAttackSound();
+                    if (audioManager && audioManager.playChainAttackSound) {
+                        audioManager.playChainAttackSound();
+                    }
+                    
+                    // 生成水平链条粒子效果
+                    if (c.dir === 'h') {
+                        c.pos.forEach(row => {
+                            spawnHorizontalChainParticles(row);
+                        });
+                    }
                 }
-                
-                // 生成水平链条粒子效果
-                if (c.dir === 'h') {
-                    c.pos.forEach(row => {
-                        spawnHorizontalChainParticles(row);
-                    });
-                }
+                if(c.timer >= 1.0) c.done=true;
+            });
+            game.activeChains = game.activeChains.filter(c=>!c.done);
+        }
+
+        game.player.vx += (game.player.x - game.player.vx)*0.5;
+        
+        if(game.bossPhase===1 && !game.scrollPaused) {
+            let visualOffset = 0;
+            if (game.scrollTimer > 0.5) {
+                const scrollPhase = (game.scrollTimer - 0.5) / 1.5;
+                visualOffset = -easeInOutQuad(scrollPhase);
             }
-            if(c.timer >= 1.0) c.done=true;
-        });
-        game.activeChains = game.activeChains.filter(c=>!c.done);
-    }
-
-    game.player.vx += (game.player.x - game.player.vx)*0.5;
-    
-    if(game.bossPhase===1 && !game.scrollPaused) {
-        let visualOffset = 0;
-        if (game.scrollTimer > 0.5) {
-            const scrollPhase = (game.scrollTimer - 0.5) / 1.5;
-            visualOffset = -easeInOutQuad(scrollPhase);
+            game.player.vy = game.player.y + visualOffset;
+        } else {
+            game.player.vy += (game.player.y - game.player.vy)*0.5;
         }
-        game.player.vy = game.player.y + visualOffset;
-    } else {
-        game.player.vy += (game.player.y - game.player.vy)*0.5;
+
+        for(let i=game.particles.length-1; i>=0; i--){
+            let p=game.particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.015; p.life-=2.0*dt;
+            if(p.life<=0) game.particles.splice(i,1);
+        }
     }
 
-    for(let i=game.particles.length-1; i>=0; i--){
-        let p=game.particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.015; p.life-=2.0*dt;
-        if(p.life<=0) game.particles.splice(i,1);
-    }
-}
-
-function takeDamage() {
-    if(game.invuln>0 || game.state!=='PLAYING') return;
-    game.hp--; game.invuln=1.5; screenShake(10); spawnBlood(game.player.vx, game.player.vy);
-    
-    // 播放受伤音效
-    if (audioManager && audioManager.playDamageSound) {
-        audioManager.playDamageSound();
-    }
-    
-    updateUI();
-    if(game.hp<=0) {
-        game.state='LOST';
+    function takeDamage() {
+        if(game.invuln>0 || game.state!=='PLAYING') return;
+        game.hp--; game.invuln=1.5; screenShake(10); spawnBlood(game.player.vx, game.player.vy);
         
-        // 播放失败音乐
-        if (audioManager && audioManager.playMusic) {
-            audioManager.playMusic('defeat');
+        // 播放受伤音效
+        if (audioManager && audioManager.playDamageSound) {
+            audioManager.playDamageSound();
         }
         
-        setTimeout(()=>showModal('dialogue',"GAME OVER","Judgement has claimed your soul.","RETRY"),300);
+        updateUI();
+        if(game.hp<=0) {
+            game.state='LOST';
+            
+            // 播放失败音乐
+            if (audioManager && audioManager.playMusic) {
+                audioManager.playMusic('defeat');
+            }
+            
+            setTimeout(()=>showModal('dialogue',"GAME OVER","Judgement has claimed your soul.","RETRY"),300);
+        }
     }
-}
 
 // --- 输入处理 ---
 function handleInput(dx, dy) {
     if(game.state!=='PLAYING' || game.inputLocked) return;
     const lvl = LEVELS[game.currentLevelIdx];
-    if(lvl.type==='BOSS' || lvl.type==='BOSS II') handleBossInput(dx,dy);
+    if(isBossLevel(lvl.type)) handleBossInput(dx,dy);
     else handlePuzzleInput(dx,dy);
 }
 
@@ -1476,7 +1523,7 @@ function handleBossInput(dx, dy) {
     const conf = lvl.config;
     
     // 检查是否可以攻击链球目标（在无限循环模式或BOSS第二阶段）
-    if(game.loopChainsActive || game.bossPhase===2) {
+    if(game.loopChainsActive) {
         let chains = game.entities.filter(e=>e.type==='chain_target');
         let hit = chains.find(c=>c.x===tx && c.y===ty);
         if(hit) {
@@ -1724,7 +1771,7 @@ function checkWin() {
 function draw() {
     ctx.fillStyle = PALETTE.void; ctx.fillRect(0, 0, canvas.width, canvas.height);
     const lvl = LEVELS[game.currentLevelIdx];
-    if(lvl.type==='BOSS' || lvl.type==='BOSS II') drawBossScene();
+    if(isBossLevel(lvl.type)) drawBossScene();
     else drawPuzzleScene();
 }
 
