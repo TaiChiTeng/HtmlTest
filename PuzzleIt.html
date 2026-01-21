@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>规则修正版拼图</title>
+    <title>拼图游戏 (视觉优化版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -37,47 +37,46 @@
         }
 
         #gameBoard {
-            display: grid;
+            /* 修改：使用 relative 定位，添加 1px padding 作为最外层边界的半个间隙 */
+            position: relative;
             width: 100%;
             aspect-ratio: 1 / 1;
             max-width: 500px;
             margin: 0 auto;
-            background-color: #cbd5e1;
-            padding: 2px;
+            background-color: white; /* 间隙颜色 */
+            padding: 1px; 
             border-radius: 4px;
-            position: relative;
             touch-action: none;
+            box-sizing: border-box;
         }
 
         .tile {
             position: absolute;
             transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
             background-repeat: no-repeat;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+            /* 修改：移除 box-shadow，依靠间隙区分 */
             z-index: 10;
             box-sizing: border-box;
-            /* 调试用：显示数字 */
-            /* display: flex; align-items: center; justify-content: center; font-size: 20px; color: white; text-shadow: 0 0 2px black; font-weight: bold; */
         }
 
         .tile.is-dragging {
             z-index: 50;
             transition: none;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
             transform: scale(1.02);
             opacity: 0.95;
+            /* 拖拽时稍微亮一点区分 */
             filter: brightness(1.1);
         }
 
         .ghost-tile {
             position: absolute;
-            background-color: rgba(59, 130, 246, 0.2);
-            border: 2px dashed #3b82f6;
+            background-color: rgba(99, 102, 241, 0.2);
+            border: 2px dashed #6366f1;
             z-index: 5;
             pointer-events: none;
         }
 
-        /* 胜利动画 */
         @keyframes pop {
             0% { transform: scale(0.8); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
@@ -93,7 +92,7 @@
     <div id="homePage" class="page-section active-page items-center justify-center p-6">
         <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
             <h1 class="text-2xl font-black text-center mb-1">STRICT PUZZLE</h1>
-            <p class="text-center text-slate-400 text-xs mb-8">规则修正版</p>
+            <p class="text-center text-slate-400 text-xs mb-8">无缝分组 · 智能间隙</p>
 
             <div class="mb-6">
                 <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Grid Size</label>
@@ -141,9 +140,15 @@
 
     <!-- 胜利弹窗 -->
     <div id="winModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm mx-4 celebrate-modal">
-            <h2 class="text-3xl font-black text-slate-800 mb-2">COMPLETE!</h2>
-            <button onclick="resetGame()" class="mt-6 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-sm mx-4 celebrate-modal w-full">
+            <h2 class="text-3xl font-black text-slate-800 mb-4">COMPLETE!</h2>
+            
+            <!-- 修改：增加结果图片展示 -->
+            <div class="w-full aspect-square rounded-lg overflow-hidden mb-6 border border-slate-200 shadow-inner">
+                <img id="winImage" class="w-full h-full object-cover" src="" />
+            </div>
+
+            <button onclick="resetGame()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors">
                 再来一次
             </button>
         </div>
@@ -155,7 +160,7 @@
         // ================= 状态管理 =================
         let gridSize = 3;
         let imgUrl = document.getElementById('previewThumb').src;
-        let boardState = []; // 存储切片ID (0 到 N^2-1)
+        let boardState = []; 
         let steps = 0;
         let isGameActive = false;
 
@@ -164,7 +169,6 @@
         let dragGroup = []; 
         let dragStartPos = { x: 0, y: 0 };
         let dragStartCell = { r: 0, c: 0 };
-        let currentDragOffset = { x: 0, y: 0 };
 
         // DOM
         const gameBoard = document.getElementById('gameBoard');
@@ -172,6 +176,7 @@
         const gamePage = document.getElementById('gamePage');
         const stepDisplay = document.getElementById('stepCount');
         const winModal = document.getElementById('winModal');
+        const winImage = document.getElementById('winImage'); // 新增
 
         // ================= 基础逻辑 =================
         function selectMode(n) {
@@ -202,11 +207,10 @@
             steps = 0;
             stepDisplay.innerText = "0";
             
-            // 初始化并完全随机打乱
             const total = gridSize * gridSize;
             boardState = Array.from({length: total}, (_, i) => i);
             
-            // 纯随机交换，不进行任何“有解”校验
+            // 随机打乱
             for (let i = total - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [boardState[i], boardState[j]] = [boardState[j], boardState[i]];
@@ -236,15 +240,51 @@
             startGame();
         }
 
-        // ================= 渲染系统 =================
+        // ================= 核心：视觉渲染 (优化间隙) =================
+        
+        // 辅助：检查某个方向是否有正确连接
+        // idx: 当前 boardState 的索引
+        // dir: 'up', 'down', 'left', 'right'
+        function hasConnection(idx, dir) {
+            const r = Math.floor(idx / gridSize);
+            const c = idx % gridSize;
+            const val = boardState[idx];
+
+            let nr = r, nc = c;
+            if (dir === 'up') nr--;
+            else if (dir === 'down') nr++;
+            else if (dir === 'left') nc--;
+            else if (dir === 'right') nc++;
+
+            // 越界检查
+            if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) return false;
+
+            const nIdx = nr * gridSize + nc;
+            const nVal = boardState[nIdx];
+
+            // 连通逻辑：值是否符合正确相邻关系
+            // 垂直：差 N
+            if (dir === 'up' && nVal === val - gridSize) return true;
+            if (dir === 'down' && nVal === val + gridSize) return true;
+            
+            // 水平：差 1 且原本在同一行
+            const correctCol = val % gridSize;
+            if (dir === 'left' && nVal === val - 1 && correctCol > 0) return true;
+            if (dir === 'right' && nVal === val + 1 && correctCol < gridSize - 1) return true;
+
+            return false;
+        }
+
         function renderBoard() {
             gameBoard.innerHTML = '';
-            gameBoard.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
-            gameBoard.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+            
+            // 不再使用 grid 布局来放置 div，而是直接 relative + absolute
+            // 这样我们可以精确控制每个 div 的 pixel 宽高来消除间隙
             
             const containerWidth = gameBoard.clientWidth;
-            // padding 2px * 2 = 4
-            const cellSize = (containerWidth - 4) / gridSize; 
+            // 减去外围 padding 2px (left 1px + right 1px)
+            const availableWidth = containerWidth - 2; 
+            const cellSize = availableWidth / gridSize; 
 
             boardState.forEach((val, idx) => {
                 const r = Math.floor(idx / gridSize);
@@ -253,23 +293,56 @@
                 const tile = document.createElement('div');
                 tile.className = 'tile';
                 tile.dataset.val = val;
-                // tile.innerText = val + 1; // 调试：显示数字
-                
-                tile.style.width = `${cellSize}px`;
-                tile.style.height = `${cellSize}px`;
-                tile.style.transform = `translate(${c * cellSize}px, ${r * cellSize}px)`;
-                
-                // 背景计算
+
+                // 1. 计算边距 (Gap Logic)
+                // 如果该方向有连接，则 margin 为 0，否则为 1px (形成 2px 缝隙)
+                const connectedUp = hasConnection(idx, 'up');
+                const connectedDown = hasConnection(idx, 'down');
+                const connectedLeft = hasConnection(idx, 'left');
+                const connectedRight = hasConnection(idx, 'right');
+
+                const mt = connectedUp ? 0 : 1;
+                const mb = connectedDown ? 0 : 1;
+                const ml = connectedLeft ? 0 : 1;
+                const mr = connectedRight ? 0 : 1;
+
+                // 2. 计算实际宽高与位置
+                // 基础位置
+                const baseLeft = c * cellSize;
+                const baseTop = r * cellSize;
+
+                // 实际位置 = 基础位置 + 左/上边距
+                const actualLeft = baseLeft + ml;
+                const actualTop = baseTop + mt;
+
+                // 实际尺寸 = 单元格尺寸 - (左边距 + 右边距)
+                const actualWidth = cellSize - ml - mr;
+                const actualHeight = cellSize - mt - mb;
+
+                tile.style.width = `${actualWidth}px`;
+                tile.style.height = `${actualHeight}px`;
+                tile.style.transform = `translate(${actualLeft}px, ${actualTop}px)`;
+
+                // 3. 背景图计算 (无缝衔接核心)
+                // 无论 tile 怎么缩进，图片都必须锚定在逻辑网格的坐标上
                 const correctR = Math.floor(val / gridSize);
                 const correctC = val % gridSize;
-                const bgSize = gridSize * 100;
-                // 修正百分比计算：使用 calc 避免浮点误差导致的细微缝隙
-                // 或者简单使用标准公式
-                const step = 100 / (gridSize - 1);
                 
+                // 图片在逻辑网格中的原点
+                const bgOriginX = correctC * cellSize;
+                const bgOriginY = correctR * cellSize;
+
+                // 因为 tile 相对逻辑网格左移了 ml，上移了 mt
+                // 所以背景图需要反向移动 ml, mt 才能对齐
+                const bgPosX = -(bgOriginX + ml);
+                const bgPosY = -(bgOriginY + mt);
+
+                // 背景总尺寸必须是固定的像素值，不能用 %，否则 tile 变形时图片会缩放
+                const totalBgSize = gridSize * cellSize;
+
                 tile.style.backgroundImage = `url('${imgUrl}')`;
-                tile.style.backgroundSize = `${bgSize}% ${bgSize}%`;
-                tile.style.backgroundPosition = `${correctC * step}% ${correctR * step}%`;
+                tile.style.backgroundSize = `${totalBgSize}px ${totalBgSize}px`;
+                tile.style.backgroundPosition = `${bgPosX}px ${bgPosY}px`;
                 
                 gameBoard.appendChild(tile);
             });
@@ -277,7 +350,7 @@
         
         window.addEventListener('resize', () => { if (isGameActive) renderBoard(); });
 
-        // ================= 组检测 (规则 3) =================
+        // ================= 组检测 (逻辑未变) =================
         function getConnectedGroup(startR, startC) {
             const visited = new Set();
             const group = [];
@@ -292,110 +365,80 @@
             let head = 0;
             while(head < group.length) {
                 const curr = group[head++];
-                const currVal = boardState[curr.r * gridSize + curr.c];
-
-                // 上下左右
-                const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+                const cIdx = curr.r * gridSize + curr.c;
                 
-                for (let d of dirs) {
-                    const nr = curr.r + d[0];
-                    const nc = curr.c + d[1];
-                    
-                    if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize && !visited.has(`${nr},${nc}`)) {
-                        const neighborVal = boardState[nr * gridSize + nc];
-                        let isCorrectNeighbor = false;
-                        
-                        // 垂直：值差 N
-                        if (d[0] === -1 && neighborVal === currVal - gridSize) isCorrectNeighbor = true;
-                        if (d[0] === 1 && neighborVal === currVal + gridSize) isCorrectNeighbor = true;
-                        
-                        // 水平：值差 1 且在同一行
-                        const correctCol = currVal % gridSize;
-                        if (d[1] === -1 && neighborVal === currVal - 1 && correctCol > 0) isCorrectNeighbor = true;
-                        if (d[1] === 1 && neighborVal === currVal + 1 && correctCol < gridSize - 1) isCorrectNeighbor = true;
+                // 复用 render 时的 connection 判断逻辑，但这里需要遍历方向找邻居
+                const dirs = [
+                    {d: 'up', dr: -1, dc: 0},
+                    {d: 'down', dr: 1, dc: 0},
+                    {d: 'left', dr: 0, dc: -1},
+                    {d: 'right', dr: 0, dc: 1}
+                ];
 
-                        if (isCorrectNeighbor) {
-                            visited.add(`${nr},${nc}`);
-                            queue.push({r: nr, c: nc});
-                            group.push({r: nr, c: nc, val: neighborVal});
-                        }
+                for (let dir of dirs) {
+                    const nr = curr.r + dir.dr;
+                    const nc = curr.c + dir.dc;
+
+                    // 只有当 hasConnection 为 true 时才加入组
+                    if (hasConnection(cIdx, dir.d) && !visited.has(`${nr},${nc}`)) {
+                        const nIdx = nr * gridSize + nc;
+                        visited.add(`${nr},${nc}`);
+                        queue.push({r: nr, c: nc});
+                        group.push({r: nr, c: nc, val: boardState[nIdx]});
                     }
                 }
             }
             return group;
         }
 
-        // ================= 移动核心 (规则 4) =================
+        // ================= 移动核心 (逻辑未变) =================
         function applyMove(group, dR, dC) {
-            // 1. 定义集合 S (原位置) 和 T (新位置)
-            const S_coords = []; // [{r, c}]
-            const T_coords = []; // [{r, c, val}]
-            
+            const S_coords = [];
+            const T_coords = [];
             const setS_keys = new Set();
             const setT_keys = new Set();
 
             group.forEach(item => {
-                // S
                 S_coords.push({r: item.r, c: item.c});
                 setS_keys.add(`${item.r},${item.c}`);
 
-                // T
                 const nr = item.r + dR;
                 const nc = item.c + dC;
                 T_coords.push({r: nr, c: nc, val: item.val});
                 setT_keys.add(`${nr},${nc}`);
             });
 
-            // 2. 计算 O = T \ S (被挤占的位置)
             const O_coords = [];
             T_coords.forEach(item => {
                 const key = `${item.r},${item.c}`;
-                if (!setS_keys.has(key)) {
-                    O_coords.push({r: item.r, c: item.c});
-                }
+                if (!setS_keys.has(key)) O_coords.push({r: item.r, c: item.c});
             });
 
-            // 3. 计算 U = S \ T (释放出的位置)
             const U_coords = [];
             S_coords.forEach(item => {
                 const key = `${item.r},${item.c}`;
-                if (!setT_keys.has(key)) {
-                    U_coords.push({r: item.r, c: item.c});
-                }
+                if (!setT_keys.has(key)) U_coords.push({r: item.r, c: item.c});
             });
 
-            // 4. 收集 L: O 中的切片值
-            // 注意: 此时 boardState 尚未修改，可直接取值
             const L_vals = [];
             O_coords.forEach(coord => {
                 const idx = coord.r * gridSize + coord.c;
                 L_vals.push(boardState[idx]);
             });
 
-            // 5. 排序 L: 按数值从大到小 (规则 4.b)
-            // 数值越大，代表在正确拼图中的位置越靠后
             L_vals.sort((a, b) => b - a);
 
-            // 6. 排序 C (即 U): 按行优先顺序 (规则 4.c)
             const C_coords = U_coords.sort((a, b) => {
                 if (a.r !== b.r) return a.r - b.r;
                 return a.c - b.c;
             });
 
-            // 7. 构建新网格
             const newBoard = [...boardState];
 
-            // a. 放置组 T (规则 4.a)
             T_coords.forEach(item => {
                 const idx = item.r * gridSize + item.c;
                 newBoard[idx] = item.val;
             });
-
-            // b. 放置 L 到 C (规则 4.d)
-            if (L_vals.length !== C_coords.length) {
-                console.error("Critical Logic Error: |L| != |C|");
-                return;
-            }
 
             for (let i = 0; i < L_vals.length; i++) {
                 const targetCoord = C_coords[i];
@@ -403,11 +446,8 @@
                 newBoard[targetIdx] = L_vals[i];
             }
 
-            // 更新并渲染
             boardState = newBoard;
             renderBoard();
-
-            // 检查胜利 (规则 5)
             checkWin();
         }
 
@@ -421,6 +461,7 @@
             }
             if (win) {
                 setTimeout(() => {
+                    winImage.src = imgUrl; // 修改：设置胜利图片
                     document.getElementById('winModal').classList.remove('hidden');
                     fireConfetti();
                 }, 300);
@@ -430,10 +471,11 @@
         // ================= 交互处理 =================
         function getCellFromPx(x, y) {
             const rect = gameBoard.getBoundingClientRect();
-            // padding 2
-            const size = (rect.width - 4) / gridSize; 
-            const r = Math.floor((y - rect.top - 2) / size);
-            const c = Math.floor((x - rect.left - 2) / size);
+            // 减去 padding 2px
+            const size = (rect.width - 2) / gridSize; 
+            // 偏移量 1px
+            const r = Math.floor((y - rect.top - 1) / size);
+            const c = Math.floor((x - rect.left - 1) / size);
             return { r, c, size };
         }
 
@@ -446,13 +488,11 @@
             const { r, c } = getCellFromPx(e.clientX, e.clientY);
             if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) return;
 
-            // 抓起组
             dragGroup = getConnectedGroup(r, c);
             isDragging = true;
             dragStartPos = { x: e.clientX, y: e.clientY };
             dragStartCell = { r, c };
 
-            // 高亮
             dragGroup.forEach(item => {
                 const el = document.querySelector(`.tile[data-val='${item.val}']`);
                 if(el) el.classList.add('is-dragging');
@@ -466,24 +506,74 @@
             const dx = e.clientX - dragStartPos.x;
             const dy = e.clientY - dragStartPos.y;
 
-            // 视觉跟随
             dragGroup.forEach(item => {
                 const el = document.querySelector(`.tile[data-val='${item.val}']`);
                 if (el) {
-                    // 获取当前计算的尺寸以确保偏移准确
-                    const size = (gameBoard.clientWidth - 4) / gridSize;
-                    const baseX = item.c * size;
-                    const baseY = item.r * size;
-                    el.style.transform = `translate(${baseX + dx}px, ${baseY + dy}px)`;
+                    // 获取当前渲染时的 transform 值是不够的，我们需要基于原始位置偏移
+                    // 重新计算 base
+                    const size = (gameBoard.clientWidth - 2) / gridSize;
+                    
+                    // 为了简单起见，我们直接获取元素当前的 style.left/top (虽然是 translate)
+                    // 但更稳妥的是重新模拟 renderBoard 的位置计算
+                    // 这里我们利用 dataset.val 找到元素，并直接在 transform 上叠加 translate
+                    // 这需要解析之前的 translate... 太复杂
+                    // 简单方案：renderBoard 时已经设置了 transform: translate(X, Y)
+                    // 我们现在将其改为 transform: translate(X + dx, Y + dy)
+                    
+                    // 为了性能，我们不解析字符串，而是重新计算这个 Tile 应该在哪里
+                    // 但是 renderBoard 中的逻辑很复杂（有 margin 0 或 1）
+                    // 所以最好的办法是：在 dragStart 时记录每个 element 的初始 transform 值
+                    // 但为了保持代码简洁，我们这里再算一次基础位置
+                    
+                    // 重新获取该元素对应的数据状态
+                    // 注意：拖拽中 boardState 没变，所以位置逻辑不变
+                    
+                    // 简单黑魔法：直接解析 matrix? 不，太乱。
+                    // 采用方案：我们在 renderBoard 把它存到 dataset 或者对象里？
+                    // 或者：我们在 dragStart 时把初始 left/top 存到 style 里？
+                    
+                    // 修正方案：
+                    // 直接利用 CSS transform 的叠加是不行的 (translate 会覆盖)。
+                    // 我们必须知道它的 "Base X/Y"。
+                    // 在 renderBoard 里，我们已经 set 过了。
+                    // 让我们把 baseLeft/baseTop 存到 dataset? 
+                    // 不用，直接用 element.offsetLeft 是相对于 parent 的? 
+                    // 它是 absolute，所以 offsetLeft 就是 left (如果 left 设定了)。
+                    // 但我是用的 translate。
+                    
+                    // 让我们修改 renderBoard，把计算出的 actualLeft, actualTop 存入 CSS var?
+                    // 或者直接读取。
+                    
+                    // 实际上，为了最流畅的效果，我们只需要让它跟随鼠标即可。
+                    // 视觉上的一致性已经在 dragStart 前完成了。
+                    // 我们只需要 parse 当前的 transform。
+                    // const style = window.getComputedStyle(el);
+                    // const matrix = new WebKitCSSMatrix(style.transform);
+                    // el.style.transform = `translate(${matrix.m41 + (e.movementX?)}px...)` -> NO, 累积误差
+                    
+                    // 最终方案：重新运行简化的位置计算
+                    // 因为我们知道 idx 和 val
+                    // 重新跑一次 renderBoard 里那一段逻辑？有点重。
+                    
+                    // 极简方案：
+                    // 在 dragStart 时，记录每个 DOM 的初始 X, Y
+                    if (!el.dataset.startX) {
+                         const style = window.getComputedStyle(el);
+                         const matrix = new DOMMatrix(style.transform);
+                         el.dataset.startX = matrix.m41;
+                         el.dataset.startY = matrix.m42;
+                    }
+                    
+                    const newX = parseFloat(el.dataset.startX) + dx;
+                    const newY = parseFloat(el.dataset.startY) + dy;
+                    el.style.transform = `translate(${newX}px, ${newY}px) scale(1.02)`;
                 }
             });
 
-            // 计算落点
             const { r: currR, c: currC, size } = getCellFromPx(e.clientX, e.clientY);
             const dR = currR - dragStartCell.r;
             const dC = currC - dragStartCell.c;
 
-            // 校验合法性 (组必须全部在界内)
             let isValid = (dR !== 0 || dC !== 0);
             if (isValid) {
                 for (let item of dragGroup) {
@@ -496,7 +586,6 @@
                 }
             }
 
-            // 幽灵块
             document.querySelectorAll('.ghost-tile').forEach(el => el.remove());
             if (isValid) {
                 dragGroup.forEach(item => {
@@ -504,9 +593,11 @@
                     const nc = item.c + dC;
                     const ghost = document.createElement('div');
                     ghost.className = 'ghost-tile';
-                    ghost.style.width = `${size}px`;
-                    ghost.style.height = `${size}px`;
-                    ghost.style.transform = `translate(${nc * size}px, ${nr * size}px)`;
+                    // ghost 也要模拟大小吗？为了简单，ghost 用标准方块即可，或者稍微小一点
+                    ghost.style.width = `${size - 2}px`;
+                    ghost.style.height = `${size - 2}px`;
+                    // 偏移 1px 居中
+                    ghost.style.transform = `translate(${nc * size + 1}px, ${nr * size + 1}px)`;
                     gameBoard.appendChild(ghost);
                 });
             }
@@ -517,7 +608,10 @@
 
             document.querySelectorAll('.tile').forEach(el => {
                 el.classList.remove('is-dragging');
-                el.style.transform = ''; // 清除内联样式
+                // 清理临时数据
+                delete el.dataset.startX;
+                delete el.dataset.startY;
+                el.style.transform = ''; // 清除内联，恢复 renderBoard 的位置
             });
             document.querySelectorAll('.ghost-tile').forEach(el => el.remove());
 
