@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>拼图游戏 (视觉优化版)</title>
+    <title>自适应拼图游戏</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -20,6 +20,7 @@
             display: flex;
             flex-direction: column;
             background-color: #f1f5f9;
+            overflow-y: auto; /* 允许垂直滚动以适应长图 */
         }
 
         .hidden-page {
@@ -27,6 +28,7 @@
             pointer-events: none;
             z-index: -1;
             transform: scale(0.98);
+            position: absolute; /* 确保隐藏时不占位 */
         }
 
         .active-page {
@@ -37,24 +39,23 @@
         }
 
         #gameBoard {
-            /* 修改：使用 relative 定位，添加 1px padding 作为最外层边界的半个间隙 */
+            /* 修改：移除 aspect-ratio，改为相对定位，高度由JS控制 */
             position: relative;
             width: 100%;
-            aspect-ratio: 1 / 1;
             max-width: 500px;
             margin: 0 auto;
-            background-color: white; /* 间隙颜色 */
+            background-color: white; 
             padding: 1px; 
             border-radius: 4px;
             touch-action: none;
             box-sizing: border-box;
+            transition: height 0.3s ease; /* 高度变化动画 */
         }
 
         .tile {
             position: absolute;
             transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
             background-repeat: no-repeat;
-            /* 修改：移除 box-shadow，依靠间隙区分 */
             z-index: 10;
             box-sizing: border-box;
         }
@@ -65,7 +66,6 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.4);
             transform: scale(1.02);
             opacity: 0.95;
-            /* 拖拽时稍微亮一点区分 */
             filter: brightness(1.1);
         }
 
@@ -90,9 +90,9 @@
 
     <!-- 设置页 -->
     <div id="homePage" class="page-section active-page items-center justify-center p-6">
-        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 my-auto">
             <h1 class="text-2xl font-black text-center mb-1">STRICT PUZZLE</h1>
-            <p class="text-center text-slate-400 text-xs mb-8">无缝分组 · 智能间隙</p>
+            <p class="text-center text-slate-400 text-xs mb-8">自适应长宽比 · 智能间隙</p>
 
             <div class="mb-6">
                 <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Grid Size</label>
@@ -105,13 +105,15 @@
 
             <div class="mb-8">
                 <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Image</label>
-                <label class="relative block w-full aspect-video rounded-lg overflow-hidden cursor-pointer group bg-slate-100 border-2 border-dashed border-slate-300">
+                <label class="relative block w-full aspect-video rounded-lg overflow-hidden cursor-pointer group bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center">
+                    <!-- 预览图也设为 object-contain 以便查看全貌，或者保持 cover 视情况而定 -->
                     <img id="previewThumb" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" />
                     <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <span class="text-white text-xs font-bold">更换图片</span>
                     </div>
                     <input id="imageInput" type="file" class="hidden" accept="image/*" />
                 </label>
+                <p id="imgRatioInfo" class="text-center text-[10px] text-slate-400 mt-2 h-4"></p>
             </div>
 
             <button onclick="startGame()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">
@@ -121,21 +123,21 @@
     </div>
 
     <!-- 游戏页 -->
-    <div id="gamePage" class="page-section hidden-page items-center justify-center p-4">
-        <div class="w-full max-w-[500px] flex justify-between items-center mb-4 px-1">
+    <div id="gamePage" class="page-section hidden-page items-center justify-start pt-10 px-4">
+        <div class="w-full max-w-[500px] flex justify-between items-center mb-4 px-1 mx-auto">
             <button onclick="backToHome()" class="text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-slate-800">
                 &larr; 返回
             </button>
             <div class="font-mono font-bold text-lg text-indigo-600" id="stepCount">0</div>
         </div>
 
-        <div id="gameBoardContainer" class="w-full max-w-[500px]">
+        <div id="gameBoardContainer" class="w-full max-w-[500px] mx-auto pb-10">
             <div id="gameBoard"></div>
+            
+            <p class="mt-8 text-center text-xs text-slate-400 max-w-xs mx-auto">
+                拖动组块。被覆盖的切片将按数值降序填入释放的空间。
+            </p>
         </div>
-        
-        <p class="mt-8 text-center text-xs text-slate-400 max-w-xs mx-auto">
-            拖动组块。被覆盖的切片将按数值降序填入释放的空间。
-        </p>
     </div>
 
     <!-- 胜利弹窗 -->
@@ -143,9 +145,9 @@
         <div class="bg-white p-6 rounded-2xl shadow-2xl text-center max-w-sm mx-4 celebrate-modal w-full">
             <h2 class="text-3xl font-black text-slate-800 mb-4">COMPLETE!</h2>
             
-            <!-- 修改：增加结果图片展示 -->
-            <div class="w-full aspect-square rounded-lg overflow-hidden mb-6 border border-slate-200 shadow-inner">
-                <img id="winImage" class="w-full h-full object-cover" src="" />
+            <div class="w-full rounded-lg overflow-hidden mb-6 border border-slate-200 shadow-inner bg-slate-100 flex items-center justify-center">
+                <!-- 结果图不强制正方形，保持原比例 -->
+                <img id="winImage" class="max-w-full max-h-[50vh] object-contain" src="" />
             </div>
 
             <button onclick="resetGame()" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors">
@@ -160,6 +162,7 @@
         // ================= 状态管理 =================
         let gridSize = 3;
         let imgUrl = document.getElementById('previewThumb').src;
+        let currentImgRatio = 1; // 修改：记录图片宽高比 (width / height)
         let boardState = []; 
         let steps = 0;
         let isGameActive = false;
@@ -176,9 +179,16 @@
         const gamePage = document.getElementById('gamePage');
         const stepDisplay = document.getElementById('stepCount');
         const winModal = document.getElementById('winModal');
-        const winImage = document.getElementById('winImage'); // 新增
+        const winImage = document.getElementById('winImage');
+        const imgRatioInfo = document.getElementById('imgRatioInfo');
 
-        // ================= 基础逻辑 =================
+        // ================= 初始化与图片处理 =================
+        
+        // 预加载默认图片以获取比例
+        window.onload = () => {
+            preloadImage(imgUrl);
+        };
+
         function selectMode(n) {
             gridSize = n;
             document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -196,12 +206,24 @@
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    imgUrl = evt.target.result;
-                    document.getElementById('previewThumb').src = imgUrl;
+                    const res = evt.target.result;
+                    preloadImage(res); // 加载并计算比例
                 }
                 reader.readAsDataURL(file);
             }
         });
+
+        // 修改：新增图片预加载函数，计算宽高比
+        function preloadImage(src) {
+            const img = new Image();
+            img.onload = () => {
+                currentImgRatio = img.width / img.height;
+                imgUrl = src;
+                document.getElementById('previewThumb').src = src;
+                imgRatioInfo.innerText = `检测到尺寸: ${img.width}x${img.height} (比例 ${currentImgRatio.toFixed(2)})`;
+            };
+            img.src = src;
+        }
 
         function startGame() {
             steps = 0;
@@ -216,6 +238,7 @@
                 [boardState[i], boardState[j]] = [boardState[j], boardState[i]];
             }
 
+            // 在切换页面前渲染，确保尺寸计算正确
             renderBoard();
 
             homePage.classList.remove('active-page');
@@ -240,11 +263,8 @@
             startGame();
         }
 
-        // ================= 核心：视觉渲染 (优化间隙) =================
+        // ================= 核心：视觉渲染 (自适应版) =================
         
-        // 辅助：检查某个方向是否有正确连接
-        // idx: 当前 boardState 的索引
-        // dir: 'up', 'down', 'left', 'right'
         function hasConnection(idx, dir) {
             const r = Math.floor(idx / gridSize);
             const c = idx % gridSize;
@@ -256,18 +276,14 @@
             else if (dir === 'left') nc--;
             else if (dir === 'right') nc++;
 
-            // 越界检查
             if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) return false;
 
             const nIdx = nr * gridSize + nc;
             const nVal = boardState[nIdx];
 
-            // 连通逻辑：值是否符合正确相邻关系
-            // 垂直：差 N
             if (dir === 'up' && nVal === val - gridSize) return true;
             if (dir === 'down' && nVal === val + gridSize) return true;
             
-            // 水平：差 1 且原本在同一行
             const correctCol = val % gridSize;
             if (dir === 'left' && nVal === val - 1 && correctCol > 0) return true;
             if (dir === 'right' && nVal === val + 1 && correctCol < gridSize - 1) return true;
@@ -278,13 +294,20 @@
         function renderBoard() {
             gameBoard.innerHTML = '';
             
-            // 不再使用 grid 布局来放置 div，而是直接 relative + absolute
-            // 这样我们可以精确控制每个 div 的 pixel 宽高来消除间隙
-            
             const containerWidth = gameBoard.clientWidth;
-            // 减去外围 padding 2px (left 1px + right 1px)
+            // 减去外围 padding 2px
             const availableWidth = containerWidth - 2; 
-            const cellSize = availableWidth / gridSize; 
+            
+            // 修改：根据图片比例计算可用高度
+            // height = width / ratio
+            const availableHeight = availableWidth / currentImgRatio;
+
+            // 设置游戏板高度
+            gameBoard.style.height = `${availableHeight + 2}px`; // +2 padding
+
+            // 分别计算单元格的宽和高
+            const cellWidth = availableWidth / gridSize; 
+            const cellHeight = availableHeight / gridSize;
 
             boardState.forEach((val, idx) => {
                 const r = Math.floor(idx / gridSize);
@@ -294,8 +317,7 @@
                 tile.className = 'tile';
                 tile.dataset.val = val;
 
-                // 1. 计算边距 (Gap Logic)
-                // 如果该方向有连接，则 margin 为 0，否则为 1px (形成 2px 缝隙)
+                // 间隙计算 (保持不变)
                 const connectedUp = hasConnection(idx, 'up');
                 const connectedDown = hasConnection(idx, 'down');
                 const connectedLeft = hasConnection(idx, 'left');
@@ -306,42 +328,37 @@
                 const ml = connectedLeft ? 0 : 1;
                 const mr = connectedRight ? 0 : 1;
 
-                // 2. 计算实际宽高与位置
-                // 基础位置
-                const baseLeft = c * cellSize;
-                const baseTop = r * cellSize;
+                // 2. 计算实际宽高与位置 (现在使用 cellWidth 和 cellHeight)
+                const baseLeft = c * cellWidth;
+                const baseTop = r * cellHeight;
 
-                // 实际位置 = 基础位置 + 左/上边距
                 const actualLeft = baseLeft + ml;
                 const actualTop = baseTop + mt;
 
-                // 实际尺寸 = 单元格尺寸 - (左边距 + 右边距)
-                const actualWidth = cellSize - ml - mr;
-                const actualHeight = cellSize - mt - mb;
+                const actualWidth = cellWidth - ml - mr;
+                const actualHeight = cellHeight - mt - mb;
 
                 tile.style.width = `${actualWidth}px`;
                 tile.style.height = `${actualHeight}px`;
                 tile.style.transform = `translate(${actualLeft}px, ${actualTop}px)`;
 
-                // 3. 背景图计算 (无缝衔接核心)
-                // 无论 tile 怎么缩进，图片都必须锚定在逻辑网格的坐标上
+                // 3. 背景图计算 (支持长方形)
                 const correctR = Math.floor(val / gridSize);
                 const correctC = val % gridSize;
                 
                 // 图片在逻辑网格中的原点
-                const bgOriginX = correctC * cellSize;
-                const bgOriginY = correctR * cellSize;
+                const bgOriginX = correctC * cellWidth;
+                const bgOriginY = correctR * cellHeight;
 
-                // 因为 tile 相对逻辑网格左移了 ml，上移了 mt
-                // 所以背景图需要反向移动 ml, mt 才能对齐
                 const bgPosX = -(bgOriginX + ml);
                 const bgPosY = -(bgOriginY + mt);
 
-                // 背景总尺寸必须是固定的像素值，不能用 %，否则 tile 变形时图片会缩放
-                const totalBgSize = gridSize * cellSize;
+                // 背景总尺寸 (宽和高独立计算)
+                const totalBgWidth = gridSize * cellWidth;
+                const totalBgHeight = gridSize * cellHeight;
 
                 tile.style.backgroundImage = `url('${imgUrl}')`;
-                tile.style.backgroundSize = `${totalBgSize}px ${totalBgSize}px`;
+                tile.style.backgroundSize = `${totalBgWidth}px ${totalBgHeight}px`;
                 tile.style.backgroundPosition = `${bgPosX}px ${bgPosY}px`;
                 
                 gameBoard.appendChild(tile);
@@ -350,7 +367,7 @@
         
         window.addEventListener('resize', () => { if (isGameActive) renderBoard(); });
 
-        // ================= 组检测 (逻辑未变) =================
+        // ================= 组检测 (逻辑不变) =================
         function getConnectedGroup(startR, startC) {
             const visited = new Set();
             const group = [];
@@ -367,7 +384,6 @@
                 const curr = group[head++];
                 const cIdx = curr.r * gridSize + curr.c;
                 
-                // 复用 render 时的 connection 判断逻辑，但这里需要遍历方向找邻居
                 const dirs = [
                     {d: 'up', dr: -1, dc: 0},
                     {d: 'down', dr: 1, dc: 0},
@@ -379,7 +395,6 @@
                     const nr = curr.r + dir.dr;
                     const nc = curr.c + dir.dc;
 
-                    // 只有当 hasConnection 为 true 时才加入组
                     if (hasConnection(cIdx, dir.d) && !visited.has(`${nr},${nc}`)) {
                         const nIdx = nr * gridSize + nc;
                         visited.add(`${nr},${nc}`);
@@ -391,7 +406,7 @@
             return group;
         }
 
-        // ================= 移动核心 (逻辑未变) =================
+        // ================= 移动核心 (逻辑不变) =================
         function applyMove(group, dR, dC) {
             const S_coords = [];
             const T_coords = [];
@@ -461,22 +476,29 @@
             }
             if (win) {
                 setTimeout(() => {
-                    winImage.src = imgUrl; // 修改：设置胜利图片
+                    winImage.src = imgUrl;
                     document.getElementById('winModal').classList.remove('hidden');
                     fireConfetti();
                 }, 300);
             }
         }
 
-        // ================= 交互处理 =================
+        // ================= 交互处理 (自适应计算) =================
+        
         function getCellFromPx(x, y) {
             const rect = gameBoard.getBoundingClientRect();
-            // 减去 padding 2px
-            const size = (rect.width - 2) / gridSize; 
-            // 偏移量 1px
-            const r = Math.floor((y - rect.top - 1) / size);
-            const c = Math.floor((x - rect.left - 1) / size);
-            return { r, c, size };
+            // 减去 padding
+            const availW = rect.width - 2;
+            const availH = rect.height - 2;
+            
+            // 修改：使用分别的宽和高
+            const cellW = availW / gridSize;
+            const cellH = availH / gridSize;
+            
+            const r = Math.floor((y - rect.top - 1) / cellH);
+            const c = Math.floor((x - rect.left - 1) / cellW);
+            
+            return { r, c, cellW, cellH }; // 返回尺寸供 ghost 使用
         }
 
         gameBoard.addEventListener('pointerdown', e => {
@@ -495,7 +517,16 @@
 
             dragGroup.forEach(item => {
                 const el = document.querySelector(`.tile[data-val='${item.val}']`);
-                if(el) el.classList.add('is-dragging');
+                if(el) {
+                    el.classList.add('is-dragging');
+                    // 记录初始 transform 以便平滑拖拽
+                    if (!el.dataset.startX) {
+                         const style = window.getComputedStyle(el);
+                         const matrix = new DOMMatrix(style.transform);
+                         el.dataset.startX = matrix.m41;
+                         el.dataset.startY = matrix.m42;
+                    }
+                }
             });
         });
 
@@ -508,69 +539,14 @@
 
             dragGroup.forEach(item => {
                 const el = document.querySelector(`.tile[data-val='${item.val}']`);
-                if (el) {
-                    // 获取当前渲染时的 transform 值是不够的，我们需要基于原始位置偏移
-                    // 重新计算 base
-                    const size = (gameBoard.clientWidth - 2) / gridSize;
-                    
-                    // 为了简单起见，我们直接获取元素当前的 style.left/top (虽然是 translate)
-                    // 但更稳妥的是重新模拟 renderBoard 的位置计算
-                    // 这里我们利用 dataset.val 找到元素，并直接在 transform 上叠加 translate
-                    // 这需要解析之前的 translate... 太复杂
-                    // 简单方案：renderBoard 时已经设置了 transform: translate(X, Y)
-                    // 我们现在将其改为 transform: translate(X + dx, Y + dy)
-                    
-                    // 为了性能，我们不解析字符串，而是重新计算这个 Tile 应该在哪里
-                    // 但是 renderBoard 中的逻辑很复杂（有 margin 0 或 1）
-                    // 所以最好的办法是：在 dragStart 时记录每个 element 的初始 transform 值
-                    // 但为了保持代码简洁，我们这里再算一次基础位置
-                    
-                    // 重新获取该元素对应的数据状态
-                    // 注意：拖拽中 boardState 没变，所以位置逻辑不变
-                    
-                    // 简单黑魔法：直接解析 matrix? 不，太乱。
-                    // 采用方案：我们在 renderBoard 把它存到 dataset 或者对象里？
-                    // 或者：我们在 dragStart 时把初始 left/top 存到 style 里？
-                    
-                    // 修正方案：
-                    // 直接利用 CSS transform 的叠加是不行的 (translate 会覆盖)。
-                    // 我们必须知道它的 "Base X/Y"。
-                    // 在 renderBoard 里，我们已经 set 过了。
-                    // 让我们把 baseLeft/baseTop 存到 dataset? 
-                    // 不用，直接用 element.offsetLeft 是相对于 parent 的? 
-                    // 它是 absolute，所以 offsetLeft 就是 left (如果 left 设定了)。
-                    // 但我是用的 translate。
-                    
-                    // 让我们修改 renderBoard，把计算出的 actualLeft, actualTop 存入 CSS var?
-                    // 或者直接读取。
-                    
-                    // 实际上，为了最流畅的效果，我们只需要让它跟随鼠标即可。
-                    // 视觉上的一致性已经在 dragStart 前完成了。
-                    // 我们只需要 parse 当前的 transform。
-                    // const style = window.getComputedStyle(el);
-                    // const matrix = new WebKitCSSMatrix(style.transform);
-                    // el.style.transform = `translate(${matrix.m41 + (e.movementX?)}px...)` -> NO, 累积误差
-                    
-                    // 最终方案：重新运行简化的位置计算
-                    // 因为我们知道 idx 和 val
-                    // 重新跑一次 renderBoard 里那一段逻辑？有点重。
-                    
-                    // 极简方案：
-                    // 在 dragStart 时，记录每个 DOM 的初始 X, Y
-                    if (!el.dataset.startX) {
-                         const style = window.getComputedStyle(el);
-                         const matrix = new DOMMatrix(style.transform);
-                         el.dataset.startX = matrix.m41;
-                         el.dataset.startY = matrix.m42;
-                    }
-                    
+                if (el && el.dataset.startX) {
                     const newX = parseFloat(el.dataset.startX) + dx;
                     const newY = parseFloat(el.dataset.startY) + dy;
                     el.style.transform = `translate(${newX}px, ${newY}px) scale(1.02)`;
                 }
             });
 
-            const { r: currR, c: currC, size } = getCellFromPx(e.clientX, e.clientY);
+            const { r: currR, c: currC, cellW, cellH } = getCellFromPx(e.clientX, e.clientY);
             const dR = currR - dragStartCell.r;
             const dC = currC - dragStartCell.c;
 
@@ -593,11 +569,10 @@
                     const nc = item.c + dC;
                     const ghost = document.createElement('div');
                     ghost.className = 'ghost-tile';
-                    // ghost 也要模拟大小吗？为了简单，ghost 用标准方块即可，或者稍微小一点
-                    ghost.style.width = `${size - 2}px`;
-                    ghost.style.height = `${size - 2}px`;
-                    // 偏移 1px 居中
-                    ghost.style.transform = `translate(${nc * size + 1}px, ${nr * size + 1}px)`;
+                    // 修改：Ghost 大小适应长宽比
+                    ghost.style.width = `${cellW - 2}px`;
+                    ghost.style.height = `${cellH - 2}px`;
+                    ghost.style.transform = `translate(${nc * cellW + 1}px, ${nr * cellH + 1}px)`;
                     gameBoard.appendChild(ghost);
                 });
             }
@@ -608,10 +583,9 @@
 
             document.querySelectorAll('.tile').forEach(el => {
                 el.classList.remove('is-dragging');
-                // 清理临时数据
                 delete el.dataset.startX;
                 delete el.dataset.startY;
-                el.style.transform = ''; // 清除内联，恢复 renderBoard 的位置
+                el.style.transform = ''; 
             });
             document.querySelectorAll('.ghost-tile').forEach(el => el.remove());
 
@@ -636,7 +610,7 @@
                 steps++;
                 stepDisplay.innerText = steps;
             } else {
-                renderBoard(); // 复位
+                renderBoard(); 
             }
 
             isDragging = false;
