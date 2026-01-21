@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>规则修正版拼图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .page-section {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            flex-direction: column;
+            background-color: #f1f5f9;
+        }
+
+        .hidden-page {
+            opacity: 0;
+            pointer-events: none;
+            z-index: -1;
+            transform: scale(0.98);
+        }
+
+        .active-page {
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 10;
+            transform: scale(1);
+        }
+
+        #gameBoard {
+            display: grid;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: #cbd5e1;
+            padding: 2px;
+            border-radius: 4px;
+            position: relative;
+            touch-action: none;
+        }
+
+        .tile {
+            position: absolute;
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            background-repeat: no-repeat;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+            z-index: 10;
+            box-sizing: border-box;
+            /* 调试用：显示数字 */
+            /* display: flex; align-items: center; justify-content: center; font-size: 20px; color: white; text-shadow: 0 0 2px black; font-weight: bold; */
+        }
+
+        .tile.is-dragging {
+            z-index: 50;
+            transition: none;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            transform: scale(1.02);
+            opacity: 0.95;
+            filter: brightness(1.1);
+        }
+
+        .ghost-tile {
+            position: absolute;
+            background-color: rgba(59, 130, 246, 0.2);
+            border: 2px dashed #3b82f6;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        /* 胜利动画 */
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .celebrate-modal {
+            animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden text-slate-800">
+
+    <!-- 设置页 -->
+    <div id="homePage" class="page-section active-page items-center justify-center p-6">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+            <h1 class="text-2xl font-black text-center mb-1">STRICT PUZZLE</h1>
+            <p class="text-center text-slate-400 text-xs mb-8">规则修正版</p>
+
+            <div class="mb-6">
+                <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Grid Size</label>
+                <div class="grid grid-cols-3 gap-3">
+                    <button onclick="selectMode(3)" class="mode-btn ring-2 ring-indigo-500 bg-indigo-50 text-indigo-700 py-3 rounded-lg text-sm font-bold" data-size="3">3 x 3</button>
+                    <button onclick="selectMode(4)" class="mode-btn border border-slate-200 text-slate-600 hover:bg-slate-50 py-3 rounded-lg text-sm font-medium" data-size="4">4 x 4</button>
+                    <button onclick="selectMode(5)" class="mode-btn border border-slate-200 text-slate-600 hover:bg-slate-50 py-3 rounded-lg text-sm font-medium" data-size="5">5 x 5</button>
+                </div>
+            </div>
+
+            <div class="mb-8">
+                <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Image</label>
+                <label class="relative block w-full aspect-video rounded-lg overflow-hidden cursor-pointer group bg-slate-100 border-2 border-dashed border-slate-300">
+                    <img id="previewThumb" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" />
+                    <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span class="text-white text-xs font-bold">更换图片</span>
+                    </div>
+                    <input id="imageInput" type="file" class="hidden" accept="image/*" />
+                </label>
+            </div>
+
+            <button onclick="startGame()" class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">
+                确 定
+            </button>
+        </div>
+    </div>
+
+    <!-- 游戏页 -->
+    <div id="gamePage" class="page-section hidden-page items-center justify-center p-4">
+        <div class="w-full max-w-[500px] flex justify-between items-center mb-4 px-1">
+            <button onclick="backToHome()" class="text-xs font-bold text-slate-500 uppercase tracking-wider hover:text-slate-800">
+                &larr; 返回
+            </button>
+            <div class="font-mono font-bold text-lg text-indigo-600" id="stepCount">0</div>
+        </div>
+
+        <div id="gameBoardContainer" class="w-full max-w-[500px]">
+            <div id="gameBoard"></div>
+        </div>
+        
+        <p class="mt-8 text-center text-xs text-slate-400 max-w-xs mx-auto">
+            拖动组块。被覆盖的切片将按数值降序填入释放的空间。
+        </p>
+    </div>
+
+    <!-- 胜利弹窗 -->
+    <div id="winModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm mx-4 celebrate-modal">
+            <h2 class="text-3xl font-black text-slate-800 mb-2">COMPLETE!</h2>
+            <button onclick="resetGame()" class="mt-6 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700">
+                再来一次
+            </button>
+        </div>
+    </div>
+
+    <canvas id="confetti" class="fixed inset-0 pointer-events-none z-[60]"></canvas>
+
+    <script>
+        // ================= 状态管理 =================
+        let gridSize = 3;
+        let imgUrl = document.getElementById('previewThumb').src;
+        let boardState = []; // 存储切片ID (0 到 N^2-1)
+        let steps = 0;
+        let isGameActive = false;
+
+        // 拖拽状态
+        let isDragging = false;
+        let dragGroup = []; 
+        let dragStartPos = { x: 0, y: 0 };
+        let dragStartCell = { r: 0, c: 0 };
+        let currentDragOffset = { x: 0, y: 0 };
+
+        // DOM
+        const gameBoard = document.getElementById('gameBoard');
+        const homePage = document.getElementById('homePage');
+        const gamePage = document.getElementById('gamePage');
+        const stepDisplay = document.getElementById('stepCount');
+        const winModal = document.getElementById('winModal');
+
+        // ================= 基础逻辑 =================
+        function selectMode(n) {
+            gridSize = n;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                const size = parseInt(btn.dataset.size);
+                if (size === n) {
+                    btn.className = "mode-btn ring-2 ring-indigo-500 bg-indigo-50 text-indigo-700 py-3 rounded-lg text-sm font-bold";
+                } else {
+                    btn.className = "mode-btn border border-slate-200 text-slate-600 hover:bg-slate-50 py-3 rounded-lg text-sm font-medium";
+                }
+            });
+        }
+
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    imgUrl = evt.target.result;
+                    document.getElementById('previewThumb').src = imgUrl;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function startGame() {
+            steps = 0;
+            stepDisplay.innerText = "0";
+            
+            // 初始化并完全随机打乱
+            const total = gridSize * gridSize;
+            boardState = Array.from({length: total}, (_, i) => i);
+            
+            // 纯随机交换，不进行任何“有解”校验
+            for (let i = total - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [boardState[i], boardState[j]] = [boardState[j], boardState[i]];
+            }
+
+            renderBoard();
+
+            homePage.classList.remove('active-page');
+            homePage.classList.add('hidden-page');
+            gamePage.classList.remove('hidden-page');
+            gamePage.classList.add('active-page');
+            
+            isGameActive = true;
+            winModal.classList.add('hidden');
+        }
+
+        function backToHome() {
+            isGameActive = false;
+            gamePage.classList.remove('active-page');
+            gamePage.classList.add('hidden-page');
+            homePage.classList.remove('hidden-page');
+            homePage.classList.add('active-page');
+        }
+
+        function resetGame() {
+            winModal.classList.add('hidden');
+            startGame();
+        }
+
+        // ================= 渲染系统 =================
+        function renderBoard() {
+            gameBoard.innerHTML = '';
+            gameBoard.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+            gameBoard.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+            
+            const containerWidth = gameBoard.clientWidth;
+            // padding 2px * 2 = 4
+            const cellSize = (containerWidth - 4) / gridSize; 
+
+            boardState.forEach((val, idx) => {
+                const r = Math.floor(idx / gridSize);
+                const c = idx % gridSize;
+                
+                const tile = document.createElement('div');
+                tile.className = 'tile';
+                tile.dataset.val = val;
+                // tile.innerText = val + 1; // 调试：显示数字
+                
+                tile.style.width = `${cellSize}px`;
+                tile.style.height = `${cellSize}px`;
+                tile.style.transform = `translate(${c * cellSize}px, ${r * cellSize}px)`;
+                
+                // 背景计算
+                const correctR = Math.floor(val / gridSize);
+                const correctC = val % gridSize;
+                const bgSize = gridSize * 100;
+                // 修正百分比计算：使用 calc 避免浮点误差导致的细微缝隙
+                // 或者简单使用标准公式
+                const step = 100 / (gridSize - 1);
+                
+                tile.style.backgroundImage = `url('${imgUrl}')`;
+                tile.style.backgroundSize = `${bgSize}% ${bgSize}%`;
+                tile.style.backgroundPosition = `${correctC * step}% ${correctR * step}%`;
+                
+                gameBoard.appendChild(tile);
+            });
+        }
+        
+        window.addEventListener('resize', () => { if (isGameActive) renderBoard(); });
+
+        // ================= 组检测 (规则 3) =================
+        function getConnectedGroup(startR, startC) {
+            const visited = new Set();
+            const group = [];
+            const queue = [{r: startR, c: startC}];
+            
+            const startIdx = startR * gridSize + startC;
+            const startVal = boardState[startIdx];
+            
+            visited.add(`${startR},${startC}`);
+            group.push({r: startR, c: startC, val: startVal});
+
+            let head = 0;
+            while(head < group.length) {
+                const curr = group[head++];
+                const currVal = boardState[curr.r * gridSize + curr.c];
+
+                // 上下左右
+                const dirs = [[-1,0], [1,0], [0,-1], [0,1]];
+                
+                for (let d of dirs) {
+                    const nr = curr.r + d[0];
+                    const nc = curr.c + d[1];
+                    
+                    if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize && !visited.has(`${nr},${nc}`)) {
+                        const neighborVal = boardState[nr * gridSize + nc];
+                        let isCorrectNeighbor = false;
+                        
+                        // 垂直：值差 N
+                        if (d[0] === -1 && neighborVal === currVal - gridSize) isCorrectNeighbor = true;
+                        if (d[0] === 1 && neighborVal === currVal + gridSize) isCorrectNeighbor = true;
+                        
+                        // 水平：值差 1 且在同一行
+                        const correctCol = currVal % gridSize;
+                        if (d[1] === -1 && neighborVal === currVal - 1 && correctCol > 0) isCorrectNeighbor = true;
+                        if (d[1] === 1 && neighborVal === currVal + 1 && correctCol < gridSize - 1) isCorrectNeighbor = true;
+
+                        if (isCorrectNeighbor) {
+                            visited.add(`${nr},${nc}`);
+                            queue.push({r: nr, c: nc});
+                            group.push({r: nr, c: nc, val: neighborVal});
+                        }
+                    }
+                }
+            }
+            return group;
+        }
+
+        // ================= 移动核心 (规则 4) =================
+        function applyMove(group, dR, dC) {
+            // 1. 定义集合 S (原位置) 和 T (新位置)
+            const S_coords = []; // [{r, c}]
+            const T_coords = []; // [{r, c, val}]
+            
+            const setS_keys = new Set();
+            const setT_keys = new Set();
+
+            group.forEach(item => {
+                // S
+                S_coords.push({r: item.r, c: item.c});
+                setS_keys.add(`${item.r},${item.c}`);
+
+                // T
+                const nr = item.r + dR;
+                const nc = item.c + dC;
+                T_coords.push({r: nr, c: nc, val: item.val});
+                setT_keys.add(`${nr},${nc}`);
+            });
+
+            // 2. 计算 O = T \ S (被挤占的位置)
+            const O_coords = [];
+            T_coords.forEach(item => {
+                const key = `${item.r},${item.c}`;
+                if (!setS_keys.has(key)) {
+                    O_coords.push({r: item.r, c: item.c});
+                }
+            });
+
+            // 3. 计算 U = S \ T (释放出的位置)
+            const U_coords = [];
+            S_coords.forEach(item => {
+                const key = `${item.r},${item.c}`;
+                if (!setT_keys.has(key)) {
+                    U_coords.push({r: item.r, c: item.c});
+                }
+            });
+
+            // 4. 收集 L: O 中的切片值
+            // 注意: 此时 boardState 尚未修改，可直接取值
+            const L_vals = [];
+            O_coords.forEach(coord => {
+                const idx = coord.r * gridSize + coord.c;
+                L_vals.push(boardState[idx]);
+            });
+
+            // 5. 排序 L: 按数值从大到小 (规则 4.b)
+            // 数值越大，代表在正确拼图中的位置越靠后
+            L_vals.sort((a, b) => b - a);
+
+            // 6. 排序 C (即 U): 按行优先顺序 (规则 4.c)
+            const C_coords = U_coords.sort((a, b) => {
+                if (a.r !== b.r) return a.r - b.r;
+                return a.c - b.c;
+            });
+
+            // 7. 构建新网格
+            const newBoard = [...boardState];
+
+            // a. 放置组 T (规则 4.a)
+            T_coords.forEach(item => {
+                const idx = item.r * gridSize + item.c;
+                newBoard[idx] = item.val;
+            });
+
+            // b. 放置 L 到 C (规则 4.d)
+            if (L_vals.length !== C_coords.length) {
+                console.error("Critical Logic Error: |L| != |C|");
+                return;
+            }
+
+            for (let i = 0; i < L_vals.length; i++) {
+                const targetCoord = C_coords[i];
+                const targetIdx = targetCoord.r * gridSize + targetCoord.c;
+                newBoard[targetIdx] = L_vals[i];
+            }
+
+            // 更新并渲染
+            boardState = newBoard;
+            renderBoard();
+
+            // 检查胜利 (规则 5)
+            checkWin();
+        }
+
+        function checkWin() {
+            let win = true;
+            for (let i = 0; i < boardState.length; i++) {
+                if (boardState[i] !== i) {
+                    win = false;
+                    break;
+                }
+            }
+            if (win) {
+                setTimeout(() => {
+                    document.getElementById('winModal').classList.remove('hidden');
+                    fireConfetti();
+                }, 300);
+            }
+        }
+
+        // ================= 交互处理 =================
+        function getCellFromPx(x, y) {
+            const rect = gameBoard.getBoundingClientRect();
+            // padding 2
+            const size = (rect.width - 4) / gridSize; 
+            const r = Math.floor((y - rect.top - 2) / size);
+            const c = Math.floor((x - rect.left - 2) / size);
+            return { r, c, size };
+        }
+
+        gameBoard.addEventListener('pointerdown', e => {
+            if (!isGameActive) return;
+            const target = e.target.closest('.tile');
+            if (!target) return;
+            e.preventDefault();
+
+            const { r, c } = getCellFromPx(e.clientX, e.clientY);
+            if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) return;
+
+            // 抓起组
+            dragGroup = getConnectedGroup(r, c);
+            isDragging = true;
+            dragStartPos = { x: e.clientX, y: e.clientY };
+            dragStartCell = { r, c };
+
+            // 高亮
+            dragGroup.forEach(item => {
+                const el = document.querySelector(`.tile[data-val='${item.val}']`);
+                if(el) el.classList.add('is-dragging');
+            });
+        });
+
+        window.addEventListener('pointermove', e => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const dx = e.clientX - dragStartPos.x;
+            const dy = e.clientY - dragStartPos.y;
+
+            // 视觉跟随
+            dragGroup.forEach(item => {
+                const el = document.querySelector(`.tile[data-val='${item.val}']`);
+                if (el) {
+                    // 获取当前计算的尺寸以确保偏移准确
+                    const size = (gameBoard.clientWidth - 4) / gridSize;
+                    const baseX = item.c * size;
+                    const baseY = item.r * size;
+                    el.style.transform = `translate(${baseX + dx}px, ${baseY + dy}px)`;
+                }
+            });
+
+            // 计算落点
+            const { r: currR, c: currC, size } = getCellFromPx(e.clientX, e.clientY);
+            const dR = currR - dragStartCell.r;
+            const dC = currC - dragStartCell.c;
+
+            // 校验合法性 (组必须全部在界内)
+            let isValid = (dR !== 0 || dC !== 0);
+            if (isValid) {
+                for (let item of dragGroup) {
+                    const nr = item.r + dR;
+                    const nc = item.c + dC;
+                    if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) {
+                        isValid = false;
+                        break;
+                    }
+                }
+            }
+
+            // 幽灵块
+            document.querySelectorAll('.ghost-tile').forEach(el => el.remove());
+            if (isValid) {
+                dragGroup.forEach(item => {
+                    const nr = item.r + dR;
+                    const nc = item.c + dC;
+                    const ghost = document.createElement('div');
+                    ghost.className = 'ghost-tile';
+                    ghost.style.width = `${size}px`;
+                    ghost.style.height = `${size}px`;
+                    ghost.style.transform = `translate(${nc * size}px, ${nr * size}px)`;
+                    gameBoard.appendChild(ghost);
+                });
+            }
+        });
+
+        window.addEventListener('pointerup', e => {
+            if (!isDragging) return;
+
+            document.querySelectorAll('.tile').forEach(el => {
+                el.classList.remove('is-dragging');
+                el.style.transform = ''; // 清除内联样式
+            });
+            document.querySelectorAll('.ghost-tile').forEach(el => el.remove());
+
+            const { r: currR, c: currC } = getCellFromPx(e.clientX, e.clientY);
+            const dR = currR - dragStartCell.r;
+            const dC = currC - dragStartCell.c;
+
+            let isValid = (dR !== 0 || dC !== 0);
+            if (isValid) {
+                for (let item of dragGroup) {
+                    const nr = item.r + dR;
+                    const nc = item.c + dC;
+                    if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) {
+                        isValid = false;
+                        break;
+                    }
+                }
+            }
+
+            if (isValid) {
+                applyMove(dragGroup, dR, dC);
+                steps++;
+                stepDisplay.innerText = steps;
+            } else {
+                renderBoard(); // 复位
+            }
+
+            isDragging = false;
+            dragGroup = [];
+        });
+
+        // ================= 庆祝特效 =================
+        function fireConfetti() {
+            const canvas = document.getElementById('confetti');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            const particles = [];
+            const colors = ['#4f46e5', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6'];
+            
+            for(let i=0; i<200; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: (Math.random() - 0.5) * 20 - 5,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    size: Math.random() * 8 + 2,
+                    life: 150
+                });
+            }
+            
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                let active = false;
+                
+                particles.forEach(p => {
+                    if(p.life > 0) {
+                        active = true;
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.4;
+                        p.life--;
+                        p.size *= 0.96;
+                        
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+                
+                if(active && !winModal.classList.contains('hidden')) {
+                    requestAnimationFrame(animate);
+                } else {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+            animate();
+        }
+    </script>
+</body>
+</html>
