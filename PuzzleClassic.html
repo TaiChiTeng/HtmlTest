@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>奇妙动物拼图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes spin-slow { from { transform: rotate(0deg) scale(2); } to { transform: rotate(360deg) scale(2); } }
+        @keyframes bounce-in { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes bounce-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .animate-spin-slow { animation: spin-slow 20s linear infinite; }
+        .animate-bounce-in { animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .animate-bounce-slow { animation: bounce-slow 2s ease-in-out infinite; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        canvas { touch-action: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- 图标组件封装 ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const ref = useRef(null);
+            useEffect(() => {
+                if (window.lucide) {
+                    ref.current.innerHTML = '';
+                    const icon = window.lucide.createIcons({
+                        icons: { [name]: window.lucide[name] },
+                        nameAttr: 'data-lucide'
+                    });
+                }
+            }, [name]);
+            return <i ref={ref} data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        };
+
+        const THEMES = [
+            {
+                id: 'dragons',
+                name: '魔法龙族',
+                color: 'from-blue-400 to-purple-600',
+                images: [
+                    'https://images.unsplash.com/photo-1577493340887-b7bfff550145?auto=format&fit=crop&w=800&q=80',
+                    'https://images.unsplash.com/photo-1516233758813-a38d024919c5?auto=format&fit=crop&w=800&q=80',
+                    'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
+                ]
+            },
+            {
+                id: 'animals',
+                name: '可爱动物',
+                color: 'from-green-400 to-teal-600',
+                images: [
+                    'https://images.unsplash.com/photo-1474511320723-9a56873867b5?auto=format&fit=crop&w=800&q=80',
+                    'https://images.unsplash.com/photo-1560807707-8cc77767d783?auto=format&fit=crop&w=800&q=80',
+                    'https://images.unsplash.com/photo-1518796745738-41048802f99a?auto=format&fit=crop&w=800&q=80',
+                ]
+            }
+        ];
+
+        // --- 核心辅助函数 ---
+        const generateJigsawShapes = (rows, cols) => {
+            const shapeData = [];
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    let top = 0, right = 0, bottom = 0, left = 0;
+                    if (y > 0) top = -shapeData[(y - 1) * cols + x].bottom;
+                    if (x < cols - 1) right = Math.random() > 0.5 ? 1 : -1;
+                    if (y < rows - 1) bottom = Math.random() > 0.5 ? 1 : -1;
+                    if (x > 0) left = -shapeData[y * cols + (x - 1)].right;
+                    shapeData.push({ top, right, bottom, left });
+                }
+            }
+            return shapeData;
+        };
+
+        const drawPuzzlePiecePath = (ctx, width, height, shape, tabSize) => {
+            const w = width, h = height, x = 0, y = 0;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            // Top
+            if (shape.top !== 0) {
+                ctx.lineTo(x + w * 0.35, y);
+                ctx.bezierCurveTo(x + w * 0.35, y - tabSize * shape.top, x + w * 0.65, y - tabSize * shape.top, x + w * 0.65, y);
+            }
+            ctx.lineTo(x + w, y);
+            // Right
+            if (shape.right !== 0) {
+                ctx.lineTo(x + w, y + h * 0.35);
+                ctx.bezierCurveTo(x + w + tabSize * shape.right, y + h * 0.35, x + w + tabSize * shape.right, y + h * 0.65, x + w, y + h * 0.65);
+            }
+            ctx.lineTo(x + w, y + h);
+            // Bottom
+            if (shape.bottom !== 0) {
+                ctx.lineTo(x + w * 0.65, y + h);
+                ctx.bezierCurveTo(x + w * 0.65, y + h + tabSize * shape.bottom, x + w * 0.35, y + h + tabSize * shape.bottom, x + w * 0.35, y + h);
+            }
+            ctx.lineTo(x, y + h);
+            // Left
+            if (shape.left !== 0) {
+                ctx.lineTo(x, y + h * 0.65);
+                ctx.bezierCurveTo(x - tabSize * shape.left, y + h * 0.65, x - tabSize * shape.left, y + h * 0.35, x, y + h * 0.35);
+            }
+            ctx.lineTo(x, y);
+            ctx.closePath();
+        };
+
+        function App() {
+            const [view, setView] = useState('MENU');
+            const [selectedTheme, setSelectedTheme] = useState(null);
+            const [difficulty, setDifficulty] = useState(3);
+            const [isHintActive, setIsHintActive] = useState(false);
+            
+            const canvasRef = useRef(null);
+            const [pieces, setPieces] = useState([]);
+            const [draggedPiece, setDraggedPiece] = useState(null);
+            const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+            const [imageObj, setImageObj] = useState(null);
+            const [canvasSize, setCanvasSize] = useState({ w: 800, h: 600 });
+            const [isComplete, setIsComplete] = useState(false);
+
+            const startGame = (imgUrl, grid) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = imgUrl;
+                img.onload = () => {
+                    setImageObj(img);
+                    const maxWidth = Math.min(window.innerWidth * 0.9, 800);
+                    const maxHeight = Math.min(window.innerHeight * 0.7, 600);
+                    const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+                    const boardW = img.width * scale;
+                    const boardH = img.height * scale;
+
+                    const shapes = generateJigsawShapes(grid, grid);
+                    const pieceW = boardW / grid;
+                    const pieceH = boardH / grid;
+                    const newPieces = [];
+                    const sidebarX = boardW + 20;
+                    const sidebarW = 180;
+
+                    for (let y = 0; y < grid; y++) {
+                        for (let x = 0; x < grid; x++) {
+                            const idx = y * grid + x;
+                            const randX = sidebarX + Math.random() * (sidebarW - pieceW * 0.8);
+                            const randY = Math.random() * (boardH - pieceH) + 20;
+
+                            newPieces.push({
+                                id: idx,
+                                correctX: x * pieceW,
+                                correctY: y * pieceH,
+                                currentX: randX,
+                                currentY: randY,
+                                width: pieceW,
+                                height: pieceH,
+                                imgX: (x * img.width) / grid,
+                                imgY: (y * img.height) / grid,
+                                imgW: img.width / grid,
+                                imgH: img.height / grid,
+                                shape: shapes[idx],
+                                isLocked: false,
+                                zIndex: idx
+                            });
+                        }
+                    }
+                    setCanvasSize({ w: boardW + 200, h: boardH });
+                    setPieces(newPieces.sort(() => Math.random() - 0.5));
+                    setIsComplete(false);
+                    setView('GAME');
+                };
+            };
+
+            useEffect(() => {
+                if (view !== 'GAME' || !canvasRef.current || !imageObj) return;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                let animationFrameId;
+
+                const render = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    const boardW = canvasSize.w - 200;
+                    const grid = Math.sqrt(pieces.length) || difficulty;
+
+                    // 1. 背景格
+                    pieces.forEach(p => {
+                        const row = Math.floor(p.id / grid);
+                        const col = p.id % grid;
+                        ctx.fillStyle = (row + col) % 2 === 0 ? 'rgba(255, 255, 255, 0.4)' : 'rgba(200, 200, 200, 0.3)';
+                        const tabSize = Math.min(p.width, p.height) * 0.25;
+                        ctx.save();
+                        ctx.translate(p.correctX, p.correctY);
+                        drawPuzzlePiecePath(ctx, p.width, p.height, p.shape, tabSize);
+                        ctx.fill();
+                        ctx.restore();
+                    });
+
+                    // 2. 边框与提示
+                    ctx.strokeStyle = '#3b82f6';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(0, 0, boardW, canvasSize.h);
+                    if (isHintActive) {
+                        ctx.globalAlpha = 0.3;
+                        ctx.drawImage(imageObj, 0, 0, boardW, canvasSize.h);
+                        ctx.globalAlpha = 1.0;
+                    }
+
+                    // 3. 排序并绘制碎片
+                    const sortedPieces = [...pieces].sort((a, b) => {
+                        if (a.isLocked !== b.isLocked) return a.isLocked ? -1 : 1;
+                        if (draggedPiece?.id === a.id) return 1;
+                        if (draggedPiece?.id === b.id) return -1;
+                        return a.zIndex - b.zIndex;
+                    });
+
+                    sortedPieces.forEach(p => {
+                        const tabSize = Math.min(p.width, p.height) * 0.25;
+                        const ratioX = p.imgW / p.width;
+                        const ratioY = p.imgH / p.height;
+                        const srcTabW = tabSize * ratioX;
+                        const srcTabH = tabSize * ratioY;
+
+                        ctx.save();
+                        ctx.translate(p.currentX, p.currentY);
+
+                        // 裁剪
+                        drawPuzzlePiecePath(ctx, p.width, p.height, p.shape, tabSize);
+                        ctx.clip();
+
+                        // 图片映射逻辑
+                        const srcX = p.imgX - (p.shape.left === 1 ? srcTabW : 0);
+                        const srcY = p.imgY - (p.shape.top === 1 ? srcTabH : 0);
+                        const srcW = p.imgW + (p.shape.left === 1 ? srcTabW : 0) + (p.shape.right === 1 ? srcTabW : 0);
+                        const srcH = p.imgH + (p.shape.top === 1 ? srcTabH : 0) + (p.shape.bottom === 1 ? srcTabH : 0);
+
+                        const dstX = 0 - (p.shape.left === 1 ? tabSize : 0);
+                        const dstY = 0 - (p.shape.top === 1 ? tabSize : 0);
+                        const dstW = p.width + (p.shape.left === 1 ? tabSize : 0) + (p.shape.right === 1 ? tabSize : 0);
+                        const dstH = p.height + (p.shape.top === 1 ? tabSize : 0) + (p.shape.bottom === 1 ? tabSize : 0);
+
+                        ctx.drawImage(imageObj, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+                        
+                        // 描边
+                        ctx.restore();
+                        ctx.save();
+                        ctx.translate(p.currentX, p.currentY);
+                        drawPuzzlePiecePath(ctx, p.width, p.height, p.shape, tabSize);
+                        ctx.strokeStyle = p.isLocked ? 'rgba(255,255,255,0.5)' : '#fff';
+                        ctx.lineWidth = 2;
+                        if (!p.isLocked) {
+                            ctx.shadowColor = 'rgba(0,0,0,0.4)';
+                            ctx.shadowBlur = 4;
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                    });
+
+                    animationFrameId = requestAnimationFrame(render);
+                };
+                render();
+                return () => cancelAnimationFrame(animationFrameId);
+            }, [pieces, isHintActive, draggedPiece, imageObj, canvasSize]);
+
+            const handlePointerDown = (e) => {
+                if (isComplete) return;
+                const rect = canvasRef.current.getBoundingClientRect();
+                const scaleX = canvasRef.current.width / rect.width;
+                const scaleY = canvasRef.current.height / rect.height;
+                const x = ((e.clientX || e.touches?.[0].clientX) - rect.left) * scaleX;
+                const y = ((e.clientY || e.touches?.[0].clientY) - rect.top) * scaleY;
+
+                for (let i = pieces.length - 1; i >= 0; i--) {
+                    const p = pieces[i];
+                    if (p.isLocked) continue;
+                    const tab = Math.min(p.width, p.height) * 0.25;
+                    if (x > p.currentX - tab && x < p.currentX + p.width + tab && y > p.currentY - tab && y < p.currentY + p.height + tab) {
+                        setDraggedPiece(p);
+                        setDragOffset({ x: x - p.currentX, y: y - p.currentY });
+                        break;
+                    }
+                }
+            };
+
+            const handlePointerMove = (e) => {
+                if (!draggedPiece) return;
+                const rect = canvasRef.current.getBoundingClientRect();
+                const scaleX = canvasRef.current.width / rect.width;
+                const scaleY = canvasRef.current.height / rect.height;
+                const x = ((e.clientX || e.touches?.[0].clientX) - rect.left) * scaleX;
+                const y = ((e.clientY || e.touches?.[0].clientY) - rect.top) * scaleY;
+
+                setPieces(prev => prev.map(p => 
+                    p.id === draggedPiece.id ? { ...p, currentX: x - dragOffset.x, currentY: y - dragOffset.y } : p
+                ));
+            };
+
+            const handlePointerUp = () => {
+                if (!draggedPiece) return;
+                const p = draggedPiece;
+                const dist = Math.hypot(p.currentX - p.correctX, p.currentY - p.correctY);
+                if (dist < 150) {
+                    const next = pieces.map(item => item.id === p.id ? { ...item, currentX: item.correctX, currentY: item.correctY, isLocked: true } : item);
+                    setPieces(next);
+                    if (next.every(i => i.isLocked)) setIsComplete(true);
+                }
+                setDraggedPiece(null);
+            };
+
+            // --- 界面渲染逻辑 ---
+            if (view === 'MENU') return (
+                <div className="w-full h-screen bg-gradient-to-br from-purple-800 to-indigo-900 flex flex-col items-center justify-center relative overflow-hidden">
+                    <div className="absolute top-10 left-10 w-32 h-32 bg-purple-500 rounded-full blur-3xl opacity-50 animate-pulse"></div>
+                    <div className="z-10 text-center mb-12">
+                        <h1 className="text-6xl md:text-8xl font-black text-white drop-shadow-2xl">动物拼图</h1>
+                        <div className="mt-4 bg-white/20 backdrop-blur-md rounded-full px-6 py-2 inline-block text-white font-bold">奇妙的拼图世界</div>
+                    </div>
+                    <button onClick={() => setView('SET_SELECT')} className="w-32 h-32 bg-yellow-400 rounded-full border-8 border-white shadow-2xl flex items-center justify-center hover:scale-110 transition-all animate-bounce-slow">
+                        <Icon name="Play" size={64} className="text-yellow-900 ml-2" />
+                    </button>
+                </div>
+            );
+
+            if (view === 'SET_SELECT') return (
+                <div className="w-full h-screen bg-blue-300 flex flex-col relative overflow-hidden">
+                    <div className="z-10 p-6 flex justify-between items-center">
+                        <button onClick={() => setView('MENU')} className="bg-red-500 text-white p-3 rounded-full border-4 border-white"><Icon name="Home" /></button>
+                        <h2 className="bg-white/90 px-6 py-2 rounded-full font-bold text-xl text-blue-600">选择主题</h2>
+                        <div className="w-12"></div>
+                    </div>
+                    <div className="flex-1 flex items-center overflow-x-auto gap-8 px-12 z-10 scrollbar-hide">
+                        {THEMES.map(theme => (
+                            <div key={theme.id} onClick={() => { setSelectedTheme(theme); setView('LEVEL_SELECT'); }} className="min-w-[280px] h-[400px] bg-white rounded-3xl p-3 shadow-2xl cursor-pointer hover:-translate-y-4 transition-all group">
+                                <div className={`w-full h-full rounded-2xl bg-gradient-to-br ${theme.color} relative overflow-hidden`}>
+                                    <img src={theme.images[0]} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100" />
+                                    <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/70 to-transparent">
+                                        <h3 className="text-white text-3xl font-bold">{theme.name}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            if (view === 'LEVEL_SELECT') return (
+                <div className="w-full h-screen bg-gradient-to-b from-blue-400 to-indigo-500 flex flex-col">
+                    <div className="p-4 flex items-center justify-between">
+                        <button onClick={() => setView('SET_SELECT')} className="bg-red-500 text-white p-2 rounded-full border-4 border-white"><Icon name="ArrowLeft" /></button>
+                        <div className="flex bg-white/20 backdrop-blur-sm p-2 rounded-xl gap-2">
+                            {[3, 4, 5].map(v => (
+                                <button key={v} onClick={() => setDifficulty(v)} className={`px-4 py-2 rounded-lg font-bold ${difficulty === v ? 'bg-yellow-400 text-yellow-900' : 'bg-white/50 text-white'}`}>{v}x{v}</button>
+                            ))}
+                        </div>
+                        <div className="w-10"></div>
+                    </div>
+                    <div className="flex-1 p-6 overflow-y-auto">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto">
+                            {selectedTheme.images.map((img, idx) => (
+                                <div key={idx} onClick={() => startGame(img, difficulty)} className="aspect-square bg-white p-2 rounded-2xl shadow-lg cursor-pointer hover:scale-105 transition-all overflow-hidden">
+                                    <img src={img} className="w-full h-full object-cover rounded-xl" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="w-full h-screen bg-pink-100 flex flex-col items-center justify-center overflow-hidden touch-none">
+                    <div className="absolute top-4 left-4 z-20 flex flex-col gap-4">
+                        <button onClick={() => setView('LEVEL_SELECT')} className="bg-red-500 text-white p-3 rounded-full border-4 border-white shadow-lg"><Icon name="Home" /></button>
+                        <button onClick={() => setIsHintActive(!isHintActive)} className={`p-3 rounded-full border-4 border-white shadow-lg ${isHintActive ? 'bg-yellow-400' : 'bg-blue-400'}`}><Icon name="Lightbulb" /></button>
+                    </div>
+                    <div className="absolute top-4 right-4 z-20 w-24 bg-white p-1 rounded shadow-xl rotate-3">
+                        <img src={imageObj?.src} className="w-full" />
+                    </div>
+                    <div className="relative bg-white/30 backdrop-blur-md p-2 rounded-2xl shadow-2xl">
+                        <canvas ref={canvasRef} width={canvasSize.w} height={canvasSize.h} onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp} className="max-w-full max-h-[80vh] rounded-lg" />
+                    </div>
+                    {isComplete && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                            <div className="bg-white rounded-3xl p-8 max-w-sm w-full mx-4 flex flex-col items-center shadow-2xl animate-bounce-in">
+                                <h2 className="text-4xl font-black text-purple-600 mb-4">太棒了!</h2>
+                                <div className="flex gap-2 mb-6">
+                                    <Icon name="Star" size={40} className="text-yellow-400 fill-current" />
+                                    <Icon name="Star" size={40} className="text-yellow-400 fill-current" />
+                                    <Icon name="Star" size={40} className="text-yellow-400 fill-current" />
+                                </div>
+                                <button onClick={() => setView('LEVEL_SELECT')} className="w-full py-4 bg-blue-500 text-white font-bold rounded-2xl shadow-lg hover:bg-blue-600 transition-colors">下一关</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
