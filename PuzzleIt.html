@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>自适应拼图游戏</title>
+    <title>自适应拼图游戏 · 组优先</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -20,7 +20,7 @@
             display: flex;
             flex-direction: column;
             background-color: #f1f5f9;
-            overflow-y: auto; /* 允许垂直滚动以适应长图 */
+            overflow-y: auto;
         }
 
         .hidden-page {
@@ -28,7 +28,7 @@
             pointer-events: none;
             z-index: -1;
             transform: scale(0.98);
-            position: absolute; /* 确保隐藏时不占位 */
+            position: absolute;
         }
 
         .active-page {
@@ -39,17 +39,16 @@
         }
 
         #gameBoard {
-            /* 修改：移除 aspect-ratio，改为相对定位，高度由JS控制 */
             position: relative;
             width: 100%;
             max-width: 500px;
             margin: 0 auto;
-            background-color: white; 
-            padding: 1px; 
+            background-color: white;
+            padding: 1px;
             border-radius: 4px;
             touch-action: none;
             box-sizing: border-box;
-            transition: height 0.3s ease; /* 高度变化动画 */
+            transition: height 0.3s ease;
         }
 
         .tile {
@@ -60,11 +59,9 @@
             box-sizing: border-box;
         }
 
-        /* 拖拽某组拼图切片样式 */
         .tile.is-dragging {
             z-index: 50;
             transition: none;
-            /* box-shadow: 0 10px 25px rgba(0,0,0,0.4); */
             transform: scale(1.02);
             opacity: 0.95;
             filter: brightness(1.1);
@@ -93,7 +90,7 @@
     <div id="homePage" class="page-section active-page items-center justify-center p-6">
         <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 my-auto">
             <h1 class="text-2xl font-black text-center mb-1">STRICT PUZZLE</h1>
-            <p class="text-center text-slate-400 text-xs mb-8">自适应长宽比 · 智能间隙</p>
+            <p class="text-center text-slate-400 text-xs mb-8">自适应长宽比 · 智能组移动</p>
 
             <div class="mb-6">
                 <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Grid Size</label>
@@ -107,7 +104,6 @@
             <div class="mb-8">
                 <label class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Image</label>
                 <label class="relative block w-full aspect-video rounded-lg overflow-hidden cursor-pointer group bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center">
-                    <!-- 预览图也设为 object-contain 以便查看全貌，或者保持 cover 视情况而定 -->
                     <img id="previewThumb" class="w-full h-full object-cover" src="https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80" />
                     <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <span class="text-white text-xs font-bold">更换图片</span>
@@ -136,7 +132,7 @@
             <div id="gameBoard"></div>
             
             <p class="mt-8 text-center text-xs text-slate-400 max-w-xs mx-auto">
-                拖动组块。被覆盖的切片将按数值降序填入释放的空间。
+                拖动组块。被覆盖的切片将优先保持组结构移动，无法整体移动时降序重排。
             </p>
         </div>
     </div>
@@ -147,7 +143,6 @@
             <h2 class="text-3xl font-black text-slate-800 mb-4">COMPLETE!</h2>
             
             <div class="w-full rounded-lg overflow-hidden mb-6 border border-slate-200 shadow-inner bg-slate-100 flex items-center justify-center">
-                <!-- 结果图不强制正方形，保持原比例 -->
                 <img id="winImage" class="max-w-full max-h-[50vh] object-contain" src="" />
             </div>
 
@@ -163,14 +158,14 @@
         // ================= 状态管理 =================
         let gridSize = 3;
         let imgUrl = document.getElementById('previewThumb').src;
-        let currentImgRatio = 1; // 修改：记录图片宽高比 (width / height)
-        let boardState = []; 
+        let currentImgRatio = 1;
+        let boardState = [];
         let steps = 0;
         let isGameActive = false;
 
         // 拖拽状态
         let isDragging = false;
-        let dragGroup = []; 
+        let dragGroup = [];
         let dragStartPos = { x: 0, y: 0 };
         let dragStartCell = { r: 0, c: 0 };
 
@@ -185,7 +180,6 @@
 
         // ================= 初始化与图片处理 =================
         
-        // 预加载默认图片以获取比例
         window.onload = () => {
             preloadImage(imgUrl);
         };
@@ -208,13 +202,12 @@
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     const res = evt.target.result;
-                    preloadImage(res); // 加载并计算比例
+                    preloadImage(res);
                 }
                 reader.readAsDataURL(file);
             }
         });
 
-        // 修改：新增图片预加载函数，计算宽高比
         function preloadImage(src) {
             const img = new Image();
             img.onload = () => {
@@ -233,13 +226,11 @@
             const total = gridSize * gridSize;
             boardState = Array.from({length: total}, (_, i) => i);
             
-            // 随机打乱
             for (let i = total - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [boardState[i], boardState[j]] = [boardState[j], boardState[i]];
             }
 
-            // 在切换页面前渲染，确保尺寸计算正确
             renderBoard();
 
             homePage.classList.remove('active-page');
@@ -264,7 +255,7 @@
             startGame();
         }
 
-        // ================= 核心：视觉渲染 (自适应版) =================
+        // ================= 核心：视觉渲染 =================
         
         function hasConnection(idx, dir) {
             const r = Math.floor(idx / gridSize);
@@ -296,18 +287,12 @@
             gameBoard.innerHTML = '';
             
             const containerWidth = gameBoard.clientWidth;
-            // 减去外围 padding 2px
-            const availableWidth = containerWidth - 2; 
-            
-            // 修改：根据图片比例计算可用高度
-            // height = width / ratio
+            const availableWidth = containerWidth - 2;
             const availableHeight = availableWidth / currentImgRatio;
 
-            // 设置游戏板高度
-            gameBoard.style.height = `${availableHeight + 2}px`; // +2 padding
+            gameBoard.style.height = `${availableHeight + 2}px`;
 
-            // 分别计算单元格的宽和高
-            const cellWidth = availableWidth / gridSize; 
+            const cellWidth = availableWidth / gridSize;
             const cellHeight = availableHeight / gridSize;
 
             boardState.forEach((val, idx) => {
@@ -318,7 +303,6 @@
                 tile.className = 'tile';
                 tile.dataset.val = val;
 
-                // 间隙计算 (保持不变)
                 const connectedUp = hasConnection(idx, 'up');
                 const connectedDown = hasConnection(idx, 'down');
                 const connectedLeft = hasConnection(idx, 'left');
@@ -329,7 +313,6 @@
                 const ml = connectedLeft ? 0 : 1;
                 const mr = connectedRight ? 0 : 1;
 
-                // 2. 计算实际宽高与位置 (现在使用 cellWidth 和 cellHeight)
                 const baseLeft = c * cellWidth;
                 const baseTop = r * cellHeight;
 
@@ -343,18 +326,15 @@
                 tile.style.height = `${actualHeight}px`;
                 tile.style.transform = `translate(${actualLeft}px, ${actualTop}px)`;
 
-                // 3. 背景图计算 (支持长方形)
                 const correctR = Math.floor(val / gridSize);
                 const correctC = val % gridSize;
                 
-                // 图片在逻辑网格中的原点
                 const bgOriginX = correctC * cellWidth;
                 const bgOriginY = correctR * cellHeight;
 
                 const bgPosX = -(bgOriginX + ml);
                 const bgPosY = -(bgOriginY + mt);
 
-                // 背景总尺寸 (宽和高独立计算)
                 const totalBgWidth = gridSize * cellWidth;
                 const totalBgHeight = gridSize * cellHeight;
 
@@ -368,7 +348,7 @@
         
         window.addEventListener('resize', () => { if (isGameActive) renderBoard(); });
 
-        // ================= 组检测 (逻辑不变) =================
+        // ================= 组检测 =================
         function getConnectedGroup(startR, startC) {
             const visited = new Set();
             const group = [];
@@ -407,61 +387,159 @@
             return group;
         }
 
-        // ================= 移动核心 (逻辑不变) =================
+        // ================= 移动核心：完全重写，修复覆盖组丢失bug =================
         function applyMove(group, dR, dC) {
-            const S_coords = [];
-            const T_coords = [];
-            const setS_keys = new Set();
-            const setT_keys = new Set();
+            // ---- 1. 计算基础坐标集合 ----
+            const S_coords = [];          // 拖动组原始位置
+            const T_coords = [];          // 拖动组目标位置
+            const setS = new Set();
+            const setT = new Set();
 
             group.forEach(item => {
                 S_coords.push({r: item.r, c: item.c});
-                setS_keys.add(`${item.r},${item.c}`);
+                setS.add(`${item.r},${item.c}`);
 
                 const nr = item.r + dR;
                 const nc = item.c + dC;
                 T_coords.push({r: nr, c: nc, val: item.val});
-                setT_keys.add(`${nr},${nc}`);
+                setT.add(`${nr},${nc}`);
             });
 
+            // ---- 2. 被覆盖的位置 O (T中不在S的位置) ----
             const O_coords = [];
             T_coords.forEach(item => {
                 const key = `${item.r},${item.c}`;
-                if (!setS_keys.has(key)) O_coords.push({r: item.r, c: item.c});
+                if (!setS.has(key)) {
+                    O_coords.push({r: item.r, c: item.c});
+                }
             });
 
+            // ---- 3. 空出的位置 U (S中不在T的位置) ----
             const U_coords = [];
             S_coords.forEach(item => {
                 const key = `${item.r},${item.c}`;
-                if (!setT_keys.has(key)) U_coords.push({r: item.r, c: item.c});
+                if (!setT.has(key)) {
+                    U_coords.push({r: item.r, c: item.c});
+                }
             });
 
-            const L_vals = [];
-            O_coords.forEach(coord => {
-                const idx = coord.r * gridSize + coord.c;
-                L_vals.push(boardState[idx]);
-            });
-
-            L_vals.sort((a, b) => b - a);
-
-            const C_coords = U_coords.sort((a, b) => {
-                if (a.r !== b.r) return a.r - b.r;
-                return a.c - b.c;
-            });
-
+            // ---- 4. 构造新棋盘（初始为当前棋盘副本） ----
             const newBoard = [...boardState];
 
+            // ---- 5. 第一步：将拖动组放置到目标位置 ----
             T_coords.forEach(item => {
                 const idx = item.r * gridSize + item.c;
                 newBoard[idx] = item.val;
             });
 
-            for (let i = 0; i < L_vals.length; i++) {
-                const targetCoord = C_coords[i];
-                const targetIdx = targetCoord.r * gridSize + targetCoord.c;
-                newBoard[targetIdx] = L_vals[i];
+            // ---- 6. 处理被覆盖的格子：它们需要被重新安置到空位U中 ----
+            
+            // 剩余待处理的覆盖格子（初始为所有O_coords）
+            let remainingO = O_coords.map(coord => ({r: coord.r, c: coord.c}));
+            // 剩余可用空位（初始为所有U_coords）
+            let remainingU = U_coords.map(coord => ({r: coord.r, c: coord.c}));
+
+            // ---- 6.1 识别O_coords中的连接组 ----
+            const visited = new Set();
+            const O_groups = [];
+            
+            remainingO.forEach(coord => {
+                const key = `${coord.r},${coord.c}`;
+                if (!visited.has(key)) {
+                    // 注意：这里要从当前棋盘状态 boardState 中找连接组
+                    const groupCells = getConnectedGroup(coord.r, coord.c);
+                    // 只保留那些在 remainingO 中的格子（因为被覆盖的格子才需要移动）
+                    const filteredGroup = groupCells.filter(cell => 
+                        remainingO.some(o => o.r === cell.r && o.c === cell.c)
+                    );
+                    if (filteredGroup.length > 0) {
+                        filteredGroup.forEach(cell => visited.add(`${cell.r},${cell.c}`));
+                        O_groups.push({
+                            cells: filteredGroup,
+                            minR: Math.min(...filteredGroup.map(g => g.r)),
+                            minC: Math.min(...filteredGroup.map(g => g.c))
+                        });
+                    }
+                }
+            });
+
+            // 按组大小降序（大组优先整体移动）
+            O_groups.sort((a, b) => b.cells.length - a.cells.length);
+
+            // ---- 6.2 尝试整体移动每个组 ----
+            O_groups.forEach(groupInfo => {
+                const groupCells = groupInfo.cells;
+                const size = groupCells.length;
+                
+                // 如果剩余空位不足，无法整体移动
+                if (remainingU.length < size) return;
+
+                // 寻找最佳的偏移量：使得组内所有格子移动后都落在剩余空位中
+                // 简单策略：用剩余空位的第一个格子作为组的左上角对齐点
+                const anchor = remainingU[0];
+                const offsetR = anchor.r - groupInfo.minR;
+                const offsetC = anchor.c - groupInfo.minC;
+
+                // 检查组内所有格子移动后是否都在remainingU中，且不与其他已移动组冲突
+                let canMove = true;
+                const targetPositions = [];
+                
+                for (let cell of groupCells) {
+                    const nr = cell.r + offsetR;
+                    const nc = cell.c + offsetC;
+                    // 必须在剩余空位列表中
+                    const found = remainingU.some(u => u.r === nr && u.c === nc);
+                    if (!found) {
+                        canMove = false;
+                        break;
+                    }
+                    targetPositions.push({r: nr, c: nc});
+                }
+
+                if (canMove) {
+                    // 执行整体移动
+                    for (let i = 0; i < groupCells.length; i++) {
+                        const cell = groupCells[i];
+                        const target = targetPositions[i];
+                        const targetIdx = target.r * gridSize + target.c;
+                        // 将被覆盖组的值赋到空位
+                        newBoard[targetIdx] = boardState[cell.r * gridSize + cell.c];
+                        
+                        // 从remainingO中移除这个被移动的格子
+                        const oIndex = remainingO.findIndex(o => o.r === cell.r && o.c === cell.c);
+                        if (oIndex !== -1) remainingO.splice(oIndex, 1);
+                        // 从remainingU中移除这个被占用的空位
+                        const uIndex = remainingU.findIndex(u => u.r === target.r && u.c === target.c);
+                        if (uIndex !== -1) remainingU.splice(uIndex, 1);
+                    }
+                }
+            });
+
+            // ---- 6.3 剩余的被覆盖格子（无法整体移动）降序重排 ----
+            if (remainingO.length > 0) {
+                // 收集这些格子当前的值
+                const vals = remainingO.map(coord => {
+                    const idx = coord.r * gridSize + coord.c;
+                    return boardState[idx];
+                });
+                // 降序排序
+                vals.sort((a, b) => b - a);
+                // 剩余空位按行优先排序
+                remainingU.sort((a, b) => {
+                    if (a.r !== b.r) return a.r - b.r;
+                    return a.c - b.c;
+                });
+
+                // 将降序值依次填入剩余空位
+                for (let i = 0; i < Math.min(vals.length, remainingU.length); i++) {
+                    const targetIdx = remainingU[i].r * gridSize + remainingU[i].c;
+                    newBoard[targetIdx] = vals[i];
+                }
+                // 注意：如果vals数量多于remainingU，理论上不会发生，因为O和U数量相等
+                // 但为了安全，多余的值丢弃（它们原本的位置已被拖动组占据）
             }
 
+            // ---- 7. 更新全局状态 ----
             boardState = newBoard;
             renderBoard();
             checkWin();
@@ -473,7 +551,7 @@
                 if (boardState[i] !== i) {
                     win = false;
                     break;
-                }
+            }
             }
             if (win) {
                 setTimeout(() => {
@@ -484,22 +562,17 @@
             }
         }
 
-        // ================= 交互处理 (自适应计算) =================
+        // ================= 交互处理 =================
         
         function getCellFromPx(x, y) {
             const rect = gameBoard.getBoundingClientRect();
-            // 减去 padding
             const availW = rect.width - 2;
             const availH = rect.height - 2;
-            
-            // 修改：使用分别的宽和高
             const cellW = availW / gridSize;
             const cellH = availH / gridSize;
-            
             const r = Math.floor((y - rect.top - 1) / cellH);
             const c = Math.floor((x - rect.left - 1) / cellW);
-            
-            return { r, c, cellW, cellH }; // 返回尺寸供 ghost 使用
+            return { r, c, cellW, cellH };
         }
 
         gameBoard.addEventListener('pointerdown', e => {
@@ -520,7 +593,6 @@
                 const el = document.querySelector(`.tile[data-val='${item.val}']`);
                 if(el) {
                     el.classList.add('is-dragging');
-                    // 记录初始 transform 以便平滑拖拽
                     if (!el.dataset.startX) {
                          const style = window.getComputedStyle(el);
                          const matrix = new DOMMatrix(style.transform);
@@ -570,7 +642,6 @@
                     const nc = item.c + dC;
                     const ghost = document.createElement('div');
                     ghost.className = 'ghost-tile';
-                    // 修改：Ghost 大小适应长宽比
                     ghost.style.width = `${cellW - 2}px`;
                     ghost.style.height = `${cellH - 2}px`;
                     ghost.style.transform = `translate(${nc * cellW + 1}px, ${nr * cellH + 1}px)`;
@@ -586,7 +657,7 @@
                 el.classList.remove('is-dragging');
                 delete el.dataset.startX;
                 delete el.dataset.startY;
-                el.style.transform = ''; 
+                el.style.transform = '';
             });
             document.querySelectorAll('.ghost-tile').forEach(el => el.remove());
 
@@ -611,7 +682,7 @@
                 steps++;
                 stepDisplay.innerText = steps;
             } else {
-                renderBoard(); 
+                renderBoard();
             }
 
             isDragging = false;
